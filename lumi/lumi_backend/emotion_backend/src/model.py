@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=7):
@@ -23,3 +24,28 @@ class SimpleCNN(nn.Module):
         x = self.features(x)
         x = self.classifier(x)
         return x
+
+
+def get_resnet(num_classes=7, pretrained=True):
+    """
+    Creates a ResNet50 model for emotion classification.
+    
+    Args:
+        num_classes: Number of emotion classes (default: 7)
+        pretrained: Use ImageNet pretrained weights (default: True)
+    
+    Returns:
+        ResNet50 model with custom classifier head
+    """
+    model = models.resnet50(pretrained=pretrained)
+    
+    # Freeze backbone layers if using pretrained weights
+    if pretrained:
+        for param in model.parameters():
+            param.requires_grad = False
+    
+    # Replace final fully connected layer
+    num_ftrs = model.fc.in_features  # 2048 for ResNet50
+    model.fc = nn.Linear(num_ftrs, num_classes)
+    
+    return model

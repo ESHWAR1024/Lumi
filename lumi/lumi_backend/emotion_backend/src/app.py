@@ -1,23 +1,103 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
 import uvicorn
-from inference import load_model, predict_from_bytes
+from .inference import load_model, predict_from_bytes
 import os
+import torch
 
 MODEL_PATH = os.environ.get('MODEL_PATH', 'models/checkpoints/best_model.pt')
-DEVICE = 'cuda' if os.environ.get('USE_CUDA','0') == '1' else 'cpu'
+DEVICE = 'cuda' if torch.cuda.is_available() and os.environ.get('USE_CUDA','1') == '1' else 'cpu'
 
-app = FastAPI()
-model = load_model(MODEL_PATH, device=DEVICE, arch='resnet')
+app = FastAPI(title="Emotion Recognition API", version="1.0.0")
+
+# Load model at startup
+try:
+    model = load_model(MODEL_PATH, device=DEVICE, arch='resnet')
+    print(f"✅ Model loaded successfully on {DEVICE}")
+except Exception as e:
+    print(f"❌ Failed to load model: {e}")
+    model = None
+
 
 @app.get('/')
 def root():
-    return {"status": "running"}
+    """Health check endpoint"""
+    return {
+        "status": "running",
+        "model_loaded": model is not None,
+        "device": DEVICE
+    }
+
+
+@app.get('/health')
+def health():
+    """Detailed health check"""
+    return {
+        "status": "healthy" if model is not None else "model_not_loaded",
+        "model_path": MODEL_PATH,
+        "device": DEVICE,
+        "cuda_available": torch.cuda.is_available()
+    }
+
 
 @app.post('/predict-image')
 async def predict_image(file: UploadFile = File(...)):
-    content = await file.read()
-    res = predict_from_bytes(model, content, device=DEVICE, img_size=48)
-    return res
+    """
+    Predict emotion from uploaded image.
+    Supports: JPG, JPEG, PNG
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    # Validate file type
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    try:
+        content = await file.read()
+        result = predict_from_bytes(model, content, device=DEVICE, img_size=48)
+        return {
+            "success": True,
+            "filename": file.filename,
+            "prediction": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+
+@app.post('/predict-batch')
+async def predict_batch(files: list[UploadFile] = File(...)):
+    """
+    Predict emotions from multiple images.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 images per batch")
+    
+    results = []
+    for file in files:
+        if not file.content_type.startswith('image/'):
+            continue
+        
+        try:
+            content = await file.read()
+            result = predict_from_bytes(model, content, device=DEVICE, img_size=48)
+            results.append({
+                "filename": file.filename,
+                "prediction": result,
+                "success": True
+            })
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "error": str(e),
+                "success": False
+            })
+    
+    return {"results": results, "total": len(results)}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host='0.0.0.0', port=8000)
