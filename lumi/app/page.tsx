@@ -1,7 +1,10 @@
 "use client";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
+  const router = useRouter();
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#A2D2FF] via-[#FFC8DD] to-[#FFAFCC] flex flex-col items-center justify-center text-[#2E2E2E]">
       <motion.div
@@ -50,6 +53,7 @@ export default function HomePage() {
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
+          onClick={() => router.push("/start")} // Navigate to /start
           className="mt-10 bg-gradient-to-r from-[#A2D2FF] to-[#FFC8DD] text-[#2E2E2E] font-semibold py-3 px-8 rounded-full shadow-lg"
         >
           Get Started →

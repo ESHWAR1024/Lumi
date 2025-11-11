@@ -2,8 +2,8 @@ import torch
 from torchvision import transforms
 from PIL import Image
 import io
-from model import get_resnet, SimpleCNN
-from dataset import CLASS_NAMES, get_transforms
+from .model import get_resnet, SimpleCNN
+from .dataset import CLASS_NAMES, get_transforms
 import numpy as np
 
 def load_model(path, device='cpu', arch='resnet'):
