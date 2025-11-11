@@ -40,6 +40,18 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-lumi_backend/emotion_recognition/dataset/
+# Virtual environments
+venv/
+.env/
+
+# Data and checkpoints
+data/
+models/
+logs/
+
+# Python cache
+__pycache__/
+*.pyc
+
 
 
