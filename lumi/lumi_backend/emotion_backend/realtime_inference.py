@@ -1,9 +1,9 @@
 """
 Real-time emotion recognition from webcam or video files.
 Usage:
-    python realtime_inference.py --source webcam
-    python realtime_inference.py --source video --video_path path/to/video.mp4
-    python realtime_inference.py --source image --image_path path/to/image.jpg
+    python realtime_inference.py --source webcam --arch efficientnet
+    python realtime_inference.py --source video --video_path path/to/video.mp4 --arch efficientnet
+    python realtime_inference.py --source image --image_path path/to/image.jpg --arch efficientnet
 """
 
 import cv2
@@ -17,15 +17,15 @@ import time
 
 
 class EmotionDetector:
-    def __init__(self, model_path, device='cpu', img_size=48):
+    def __init__(self, model_path, device='cpu', img_size=224, arch='efficientnet'):
         """Initialize emotion detector with trained model."""
-        self.model = load_model(model_path, device=device, arch='resnet')
+        self.model = load_model(model_path, device=device, arch=arch)
         self.device = device
         self.img_size = img_size
         self.face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
-        print(f"✅ Model loaded on {device}")
+        print(f"✅ Model loaded on {device} (Architecture: {arch})")
     
     def detect_faces(self, frame):
         """Detect faces in frame using Haar Cascade."""
@@ -222,6 +222,10 @@ class EmotionDetector:
             pred = self.predict_emotion(face_roi)
             predictions.append(pred)
             print(f"   Face {idx+1}: {pred['label']} ({pred['prob']:.2%})")
+            # Show all probabilities
+            print("   All emotions:")
+            for emotion, prob in sorted(pred['all_probs'].items(), key=lambda x: x[1], reverse=True):
+                print(f"     {emotion:10s}: {prob*100:5.1f}%")
         
         # Draw results
         frame = self.draw_results(frame, faces, predictions)
@@ -241,7 +245,7 @@ class EmotionDetector:
 def main():
     parser = argparse.ArgumentParser(description='Real-time Emotion Recognition')
     parser.add_argument('--model_path', type=str, 
-                       default='models/checkpoints/best_model.pt',
+                       default='models/checkpoints/checkpoint_epoch50.pt',
                        help='Path to trained model checkpoint')
     parser.add_argument('--source', type=str, choices=['webcam', 'video', 'image'],
                        default='webcam', help='Input source type')
@@ -253,11 +257,17 @@ def main():
     parser.add_argument('--save_output', action='store_true', 
                        help='Save processed video/image')
     parser.add_argument('--output_path', type=str, help='Output file path')
+    parser.add_argument('--arch', type=str, default='efficientnet', 
+                       choices=['resnet', 'efficientnet', 'simple'],
+                       help='Model architecture (must match training)')
+    parser.add_argument('--img_size', type=int, default=224,
+                       help='Image size (should match training, e.g., 224 for EfficientNet, 48 for simple models)')
     
     args = parser.parse_args()
     
     # Initialize detector
-    detector = EmotionDetector(args.model_path, device=args.device)
+    detector = EmotionDetector(args.model_path, device=args.device, 
+                               img_size=args.img_size, arch=args.arch)
     
     # Process based on source type
     if args.source == 'webcam':

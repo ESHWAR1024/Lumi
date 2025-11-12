@@ -49,3 +49,29 @@ def get_resnet(num_classes=7, pretrained=True):
     model.fc = nn.Linear(num_ftrs, num_classes)
     
     return model
+
+
+def get_efficientnet(num_classes=7, pretrained=True):
+    """
+    Creates an EfficientNet-B0 model for emotion classification.
+    
+    Args:
+        num_classes: Number of emotion classes (default: 7)
+        pretrained: Use ImageNet pretrained weights (default: True)
+    
+    Returns:
+        EfficientNet-B0 model with custom classifier head
+    """
+    model = models.efficientnet_b0(pretrained=pretrained)
+    
+    # Freeze backbone layers if using pretrained weights
+    if pretrained:
+        for param in model.parameters():
+            param.requires_grad = False
+    
+    # Replace classifier
+    # EfficientNet classifier is a Sequential with [Dropout, Linear]
+    num_ftrs = model.classifier[1].in_features  # 1280 for EfficientNet-B0
+    model.classifier[1] = nn.Linear(num_ftrs, num_classes)
+    
+    return model
