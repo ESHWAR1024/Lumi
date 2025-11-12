@@ -1,9 +1,39 @@
 "use client";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function HomePage() {
   const router = useRouter();
+
+  useEffect(() => {
+    checkProfile();
+  }, []);
+
+  const checkProfile = async () => {
+    const storedProfileId = localStorage.getItem("childProfileId");
+    if (storedProfileId) {
+      const { data, error } = await supabase
+        .from("child_profiles")
+        .select("*")
+        .eq("id", storedProfileId)
+        .single();
+
+      if (data && !error) {
+        router.push("/start");
+      }
+    }
+  };
+
+  const handleGetStarted = () => {
+    const storedProfileId = localStorage.getItem("childProfileId");
+    if (storedProfileId) {
+      router.push("/start");
+    } else {
+      router.push("/onboarding");
+    }
+  };
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#A2D2FF] via-[#FFC8DD] to-[#FFAFCC] flex flex-col items-center justify-center text-[#2E2E2E]">
@@ -53,7 +83,7 @@ export default function HomePage() {
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => router.push("/start")} // Navigate to /start
+          onClick={handleGetStarted}
           className="mt-10 bg-gradient-to-r from-[#A2D2FF] to-[#FFC8DD] text-[#2E2E2E] font-semibold py-3 px-8 rounded-full shadow-lg"
         >
           Get Started →
