@@ -1,14 +1,25 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from .inference import load_model, predict_from_bytes
 import os
 import torch
+import base64
 
 MODEL_PATH = os.environ.get('MODEL_PATH', 'models/checkpoints/best_model.pt')
 DEVICE = 'cuda' if torch.cuda.is_available() and os.environ.get('USE_CUDA','1') == '1' else 'cpu'
 
 app = FastAPI(title="Emotion Recognition API", version="1.0.0")
+
+# Add CORS middleware for Next.js frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Add your Next.js ports
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load model at startup
 try:
@@ -55,11 +66,34 @@ async def predict_image(file: UploadFile = File(...)):
     
     try:
         content = await file.read()
-        result = predict_from_bytes(model, content, device=DEVICE, img_size=48)
+        result = predict_from_bytes(model, content, device=DEVICE, img_size=224)
         return {
             "success": True,
             "filename": file.filename,
             "prediction": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+
+@app.post('/predict-frame')
+async def predict_frame(file: UploadFile = File(...)):
+    """
+    Real-time prediction endpoint for webcam frames.
+    Optimized for speed.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    try:
+        content = await file.read()
+        result = predict_from_bytes(model, content, device=DEVICE, img_size=224)
+        
+        return {
+            "success": True,
+            "emotion": result['label'],
+            "confidence": result['prob'],
+            "all_probabilities": result['all_probs']
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
@@ -83,7 +117,7 @@ async def predict_batch(files: list[UploadFile] = File(...)):
         
         try:
             content = await file.read()
-            result = predict_from_bytes(model, content, device=DEVICE, img_size=48)
+            result = predict_from_bytes(model, content, device=DEVICE, img_size=224)
             results.append({
                 "filename": file.filename,
                 "prediction": result,
