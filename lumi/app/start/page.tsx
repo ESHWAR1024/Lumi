@@ -48,6 +48,25 @@ export default function StartPage() {
     loadProfile();
   }, []);
 
+  // Attach stream to video element when recording starts
+  useEffect(() => {
+    if (isRecording && streamRef.current) {
+      // Use requestAnimationFrame to wait for DOM to update
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          console.log("🔍 Checking videoRef after RAF:", videoRef.current);
+          if (videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current;
+            console.log("✅ Stream attached to video element!");
+            console.log("📹 Video readyState:", videoRef.current.readyState);
+          } else {
+            console.log("❌ Still no videoRef after RAF");
+          }
+        });
+      });
+    }
+  }, [isRecording]);
+
   const loadProfile = async () => {
     const storedProfileId = localStorage.getItem("childProfileId");
     if (!storedProfileId) {
@@ -85,7 +104,7 @@ export default function StartPage() {
       setError("");
       setEmotion("");
       setConfidence(0);
-      setCountdown(45);
+      setCountdown(6);
 
       // Request camera access with better constraints
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -97,29 +116,21 @@ export default function StartPage() {
         audio: false,
       });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        
-        // Wait for video to be ready before showing UI
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(err => {
-            console.error("Video play error:", err);
-            setError("Failed to start video playback");
-          });
-        };
-      }
-
+      console.log("✅ Camera stream obtained");
+      streamRef.current = stream;
+      
+      // Show video UI - useEffect will attach the stream
       setIsRecording(true);
+      setCountdown(10); // Start at 10 seconds
 
-      // Start emotion detection after 1 second delay (let camera initialize)
+      // Start emotion detection after 2 seconds (let camera initialize)
       setTimeout(() => {
         intervalRef.current = setInterval(() => {
           captureAndPredict();
         }, 1000); // Predict every second
-      }, 1000);
+      }, 2000);
 
-      // Auto-stop after 6 seconds
+      // Start 10-second countdown timer
       countdownRef.current = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
@@ -130,38 +141,64 @@ export default function StartPage() {
         });
       }, 1000);
     } catch (err: any) {
-      const errorMessage = err.name === "NotAllowedError" 
-        ? "Camera permission denied. Please allow camera access."
-        : err.name === "NotFoundError"
-        ? "No camera found on this device."
-        : err.name === "NotReadableError"
-        ? "Camera is already in use by another application."
-        : "Failed to access camera. Please try again.";
+      console.error("❌ Camera access error:", err);
+      
+      let errorMessage: string;
+      
+      if (err.name === "NotAllowedError") {
+        errorMessage = "Camera permission denied. Please allow camera access.";
+        console.error("🚫 User denied camera permission");
+      } else if (err.name === "NotFoundError") {
+        errorMessage = "No camera found on this device.";
+        console.error("📷 No camera device detected");
+      } else if (err.name === "NotReadableError") {
+        errorMessage = "Camera is already in use by another application.";
+        console.error("🔒 Camera is being used by another app");
+      } else {
+        errorMessage = "Failed to access camera. Please try again.";
+        console.error("⚠️ Unknown camera error:", err.message);
+      }
       
       setError(errorMessage);
-      console.error("Camera error:", err);
     }
   };
 
   const stopCamera = () => {
-    // Stop all tracks
+    console.log("🛑 Stopping camera and cleaning up resources...");
+    
+    // Stop all MediaStream tracks
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        console.log(`✅ Stopped track: ${track.kind}`);
+      });
       streamRef.current = null;
+    }
+
+    // Remove event listeners and clear video element srcObject
+    if (videoRef.current) {
+      const video = videoRef.current;
+      
+      // Clear srcObject
+      video.srcObject = null;
+      console.log("✅ Cleared video srcObject");
     }
 
     // Clear intervals
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
+      console.log("✅ Cleared emotion detection interval");
     }
 
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
       countdownRef.current = null;
+      console.log("✅ Cleared countdown interval");
     }
 
     setIsRecording(false);
+    console.log("✅ Camera cleanup complete");
   };
 
   const captureAndPredict = async () => {
@@ -297,7 +334,7 @@ export default function StartPage() {
       )}
 
       {/* Main Content */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {!isRecording ? (
           <motion.div
             key="start"
@@ -336,36 +373,31 @@ export default function StartPage() {
             transition={{ duration: 0.5 }}
             className="flex flex-col items-center gap-6 max-w-4xl w-full"
           >
-            {/* Video Container */}
-            <div className="relative bg-white/90 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden p-4">
+            {/* Video Container - Clean webcam display */}
+            <div className="relative bg-gray-800 rounded-3xl shadow-2xl overflow-hidden border-4 border-gray-600">
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 muted
-                className="w-full max-w-2xl rounded-2xl transform scale-x-[-1] bg-black"
-                style={{ maxHeight: '480px', minHeight: '360px' }}
+                className="w-full max-w-2xl rounded-2xl transform scale-x-[-1]"
+                style={{ 
+                  width: '640px', 
+                  height: '480px',
+                  objectFit: 'cover'
+                }}
               />
               
-              {/* Countdown Overlay */}
-              <div className="absolute top-8 right-8 bg-black/60 text-white px-4 py-2 rounded-full text-lg font-bold">
+              {/* Countdown Timer */}
+              <div className="absolute top-6 right-6 bg-black/70 text-white px-4 py-2 rounded-full text-xl font-bold shadow-lg">
                 {countdown}s
               </div>
 
               {/* Camera Status Indicator */}
-              <div className="absolute top-8 left-8 flex items-center gap-2 bg-green-500/90 text-white px-3 py-2 rounded-full text-sm font-semibold">
+              <div className="absolute top-6 left-6 flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg">
                 <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
                 Live
               </div>
-
-              {/* Loading indicator */}
-              {!emotion && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-                  <div className="text-white text-lg font-semibold bg-black/60 px-4 py-2 rounded-lg">
-                    Initializing camera...
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Hidden Canvas for capturing frames */}
