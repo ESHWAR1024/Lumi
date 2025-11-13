@@ -23,7 +23,8 @@ app.add_middleware(
 
 # Load model at startup
 try:
-    model = load_model(MODEL_PATH, device=DEVICE, arch='resnet')
+    model = load_model(MODEL_PATH, device=DEVICE, arch='efficientnet')
+
     print(f"✅ Model loaded successfully on {DEVICE}")
 except Exception as e:
     print(f"❌ Failed to load model: {e}")
