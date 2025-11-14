@@ -403,55 +403,29 @@ export default function StartPage() {
             {/* Hidden Canvas for capturing frames */}
             <canvas ref={canvasRef} style={{ display: "none" }} />
 
-            {/* Emotion Display */}
+            {/* Emotion Display - Word with Confidence */}
             <AnimatePresence mode="wait">
               {emotion && (
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-white/90 backdrop-blur-md rounded-2xl p-8 shadow-xl w-full max-w-md"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.3 }}
+                  className="bg-white/90 backdrop-blur-md rounded-3xl px-16 py-12 shadow-2xl"
                 >
-                  <div className="flex items-center justify-center gap-4 mb-6">
-                    <span
-                      className="text-6xl"
+                  <div className="flex flex-col items-center gap-3">
+                    <h2 
+                      className="text-6xl font-bold capitalize text-center"
                       style={{
-                        filter: `drop-shadow(0 0 20px ${EMOTION_COLORS[emotion.toLowerCase()] || "#808080"})`,
+                        color: EMOTION_COLORS[emotion.toLowerCase()] || "#808080",
+                        textShadow: `0 0 30px ${EMOTION_COLORS[emotion.toLowerCase()] || "#808080"}40`
                       }}
                     >
-                      {EMOTION_EMOJIS[emotion.toLowerCase()] || "😐"}
-                    </span>
-                    <div>
-                      <h2 className="text-3xl font-bold capitalize">{emotion}</h2>
-                      <p className="text-lg text-gray-600">
-                        {(confidence * 100).toFixed(1)}% confident
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* All Emotions Bar Chart */}
-                  <div className="space-y-2">
-                    {Object.entries(allEmotions)
-                      .sort(([, a], [, b]) => b - a)
-                      .map(([emo, prob]) => (
-                        <div key={emo} className="flex items-center gap-2">
-                          <span className="text-sm w-20 capitalize">{emo}</span>
-                          <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${prob * 100}%` }}
-                              transition={{ duration: 0.5 }}
-                              className="h-full rounded-full"
-                              style={{
-                                backgroundColor: EMOTION_COLORS[emo.toLowerCase()] || "#808080",
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-600 w-12 text-right">
-                            {(prob * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                      ))}
+                      {emotion}
+                    </h2>
+                    <p className="text-2xl text-gray-600 font-semibold">
+                      {(confidence * 100).toFixed(1)}%
+                    </p>
                   </div>
                 </motion.div>
               )}
