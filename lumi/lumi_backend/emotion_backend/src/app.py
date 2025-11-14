@@ -7,7 +7,7 @@ import os
 import torch
 import base64
 
-MODEL_PATH = os.environ.get('MODEL_PATH', 'models/checkpoints/best_model.pt')
+MODEL_PATH = os.environ.get('MODEL_PATH', 'models/checkpoints/checkpoint_epoch50.pt')
 DEVICE = 'cuda' if torch.cuda.is_available() and os.environ.get('USE_CUDA','1') == '1' else 'cpu'
 
 app = FastAPI(title="Emotion Recognition API", version="1.0.0")
@@ -24,7 +24,6 @@ app.add_middleware(
 # Load model at startup
 try:
     model = load_model(MODEL_PATH, device=DEVICE, arch='efficientnet')
-
     print(f"✅ Model loaded successfully on {DEVICE}")
 except Exception as e:
     print(f"❌ Failed to load model: {e}")
