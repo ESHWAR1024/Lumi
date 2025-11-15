@@ -8,9 +8,18 @@ import torchvision.transforms as T
 from torchvision.transforms import functional as TF
 
 # =========================================================
-# ⚡ YOUR ORIGINAL CLASS NAMES
+# ⚡ FER+ CLASS NAMES (8 EMOTIONS)
 # =========================================================
-CLASS_NAMES = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+# CRITICAL: This order must match your folder names exactly!
+# Check with: ls data/train/
+CLASS_NAMES = ['neutral', 'happy', 'suprise', 'sad', 'angry', 'disgust', 'fear', 'contempt']
+
+# Alternative mappings if your folders use different names:
+# If folders are: angry, disgust, fear, happy, sad, surprise, neutral, contempt
+# CLASS_NAMES = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral', 'contempt']
+
+# If folders are: Neutral, Happiness, Surprise, Sadness, Anger, Disgust, Fear, Contempt (capitalized)
+# CLASS_NAMES = ['Neutral', 'Happiness', 'Surprise', 'Sadness', 'Anger', 'Disgust', 'Fear', 'Contempt']
 
 
 # =========================================================
@@ -142,22 +151,12 @@ def get_transforms(phase="train", img_size=224):
 
 
 # =========================================================
-# ✅ EXPW DATASET LOADER (WORKING WITH origin/ + label.lst)
+# ✅ EXPW DATASET LOADER (KEPT FOR COMPATIBILITY)
 # =========================================================
 
 class ExpWDataset(Dataset):
     """
-    ExpW dataset format:
-    
-    root/
-        origin/
-            000001.jpg
-            000002.jpg
-            ...
-        label.lst
-
-    label.lst fields:
-        image_name face_id top left right bottom confidence expression_label
+    ExpW dataset format - keeping for compatibility
     """
 
     def __init__(self, root_dir, transform=None):
@@ -172,8 +171,8 @@ class ExpWDataset(Dataset):
             for line in f:
                 parts = line.strip().split()
 
-                img_name = parts[0]           # 000123.jpg
-                expr_label = int(parts[-1])   # last column = expression 0–6
+                img_name = parts[0]
+                expr_label = int(parts[-1])
 
                 full_path = os.path.join(self.img_dir, img_name)
 
@@ -196,7 +195,7 @@ class ExpWDataset(Dataset):
 
 
 # =========================================================
-# ⚡ YOUR ORIGINAL FERImageFolder + TTA (UNCHANGED)
+# ⚡ FERImageFolder - WORKS FOR FER+! (UNCHANGED)
 # =========================================================
 
 class FERImageFolder(Dataset):

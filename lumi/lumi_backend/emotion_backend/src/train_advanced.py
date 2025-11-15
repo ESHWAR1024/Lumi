@@ -18,6 +18,7 @@ from tqdm import tqdm
 import json
 from pathlib import Path
 import numpy as np
+import torch.nn.functional as F
 
 # Import your modules
 from dataset import FERImageFolder, get_transforms, CLASS_NAMES
@@ -208,7 +209,7 @@ class AdvancedTrainer:
                 self.criterion = nn.CrossEntropyLoss(weight=self.class_weights)
                 print("✅ Using Weighted CrossEntropy")
             else:
-                self.criterion = nn.CrossEntropy Loss()
+                self.criterion = nn.CrossEntropyLoss()
                 print("✅ Using CrossEntropy")
         
         # Optimizer with different learning rates
