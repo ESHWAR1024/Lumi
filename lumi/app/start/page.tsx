@@ -87,16 +87,19 @@ export default function StartPage() {
         .from("child_routines")
         .select("*")
         .eq("child_profile_id", storedProfileId)
-        .single();
+        .maybeSingle();
 
-      if (routineError) {
+      // Check for actual database errors (not "no rows found")
+      if (routineError && routineError.code !== "PGRST116") {
         console.error("Failed to load routine:", routineError);
         setError("Failed to load routine. Please check your connection.");
         setLoading(false);
         return;
       }
 
+      // If no routine found, redirect to routine setup
       if (!routineData) {
+        console.log("No routine found, redirecting to routine setup");
         router.push("/routine");
         return;
       }
@@ -843,6 +846,92 @@ export default function StartPage() {
     }
   };
 
+  const handleInitialDigDeeper = async () => {
+    if (!childProfile) {
+      console.error("❌ Cannot generate alternative prompts - childProfile is null");
+      setError("Profile not loaded. Please refresh the page and try again.");
+      return;
+    }
+    
+    setShowCards(false);
+    setLoadingPrompts(true);
+    setError("");
+    
+    try {
+      const formatRoutineForAPI = (routine: any) => {
+        if (!routine) {
+          return {
+            wake_up_time: null,
+            breakfast_time: null,
+            lunch_time: null,
+            snacks_time: null,
+            dinner_time: null,
+            bedtime: null,
+            favorite_activities: null,
+            comfort_items: null,
+            preferred_prompts: null,
+            communication_preferences: null
+          };
+        }
+        
+        return {
+          wake_up_time: routine.wake_time || routine.wake_up_time || null,
+          breakfast_time: routine.breakfast_time || null,
+          lunch_time: routine.lunch_time || null,
+          snacks_time: routine.snack_times ? (Array.isArray(routine.snack_times) ? routine.snack_times.join(", ") : routine.snack_times) : null,
+          dinner_time: routine.dinner_time || null,
+          bedtime: routine.bedtime || null,
+          favorite_activities: routine.favorite_activities ? (Array.isArray(routine.favorite_activities) ? routine.favorite_activities.join(", ") : routine.favorite_activities) : null,
+          comfort_items: routine.comfort_items ? (Array.isArray(routine.comfort_items) ? routine.comfort_items.join(", ") : routine.comfort_items) : null,
+          preferred_prompts: routine.preferred_prompts ? (Array.isArray(routine.preferred_prompts) ? routine.preferred_prompts.join(", ") : routine.preferred_prompts) : null,
+          communication_preferences: routine.communication_preferences || null
+        };
+      };
+      
+      // Use the current emotion from ref
+      const currentEmotion = emotionRef.current || emotion;
+      
+      const response = await fetch("http://localhost:8001/api/prompts/initial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emotion: currentEmotion,
+          child_profile_id: childProfile.id,
+          confidence: confidence,
+          child_profile: {
+            child_name: childProfile.child_name,
+            age: childProfile.age,
+            diagnosis: childProfile.diagnosis || childProfile.condition
+          },
+          child_routine: formatRoutineForAPI(childRoutine),
+          current_time: getCurrentTime()
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error("❌ API Error Response:", errorData);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ Received alternative prompts:", data);
+      
+      setPrompts(data.prompts);
+      setShowCards(true);
+      
+      // Store this as a "dig_deeper" action on initial prompts
+      await storeInteraction("none_of_these", data.prompts, "initial_dig_deeper");
+    } catch (err) {
+      console.error("Failed to generate alternative prompts:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      setError(`Failed to load alternative cards: ${errorMessage}. Please try again.`);
+      setShowCards(true); // Show the original cards again
+    } finally {
+      setLoadingPrompts(false);
+    }
+  };
+
   const captureAndPredict = async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -978,7 +1067,7 @@ export default function StartPage() {
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={startCamera}
+              onClick={() => {}}
               className="bg-gradient-to-r from-[#A2D2FF] to-[#FFC8DD] text-[#2E2E2E] font-semibold text-2xl w-32 h-32 rounded-full shadow-xl flex items-center justify-center"
             >
               Start
@@ -1083,13 +1172,24 @@ export default function StartPage() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -30 }}
-            className="w-full flex justify-center"
+            className="w-full flex flex-col items-center gap-6"
           >
             <PictureCards 
               prompts={prompts} 
               onSelect={handleCardSelect}
               emotion={emotion}
             />
+            
+            {promptType === "initial" && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleInitialDigDeeper}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-lg px-8 py-4 rounded-full shadow-lg"
+              >
+                None of these - Show me different options
+              </motion.button>
+            )}
           </motion.div>
         )}
 
