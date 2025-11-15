@@ -55,6 +55,9 @@ export default function StartPage() {
   // Eye tracking state
   const [eyeTrackingEnabled, setEyeTrackingEnabled] = useState(false);
   
+  // Session active state - tracks if a session has started
+  const [sessionActive, setSessionActive] = useState(false);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -164,6 +167,7 @@ export default function StartPage() {
       setInteractionDepth(1);
       emotionRef.current = ""; // Reset ref as well
       emotionHistoryRef.current = []; // Reset emotion history
+      setSessionActive(true); // Mark session as active
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -669,6 +673,9 @@ export default function StartPage() {
     
     // Clear any errors
     setError("");
+    
+    // Mark session as inactive - this will show the logo and start button again
+    setSessionActive(false);
   };
 
   const handleSatisfied = async () => {
@@ -1122,7 +1129,7 @@ export default function StartPage() {
 
       {/* Main Content */}
       <AnimatePresence>
-        {!isRecording && !showCards && !showActionButtons && !showSolution && (
+        {!sessionActive && !isRecording && !showCards && !showActionButtons && !showSolution && (
           <motion.div
             key="start"
             initial={{ opacity: 0, y: 30 }}
