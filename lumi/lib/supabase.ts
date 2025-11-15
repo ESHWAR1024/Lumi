@@ -11,6 +11,8 @@ export interface ChildProfile {
   age: number;
   parent_email: string;
   condition: string;
+  diagnosis?: string;
+  can_type?: boolean;
   created_at?: string;
   updated_at?: string;
 }

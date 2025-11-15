@@ -11,6 +11,7 @@ export default function OnboardingPage() {
     age: "",
     parent_email: "",
     condition: "",
+    can_type: true,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +46,7 @@ export default function OnboardingPage() {
         age: parseInt(formData.age),
         parent_email: formData.parent_email,
         condition: formData.condition,
+        can_type: formData.can_type,
       };
 
       const { data, error } = await supabase
@@ -146,6 +148,38 @@ export default function OnboardingPage() {
               className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#A2D2FF] focus:border-transparent outline-none text-black"
               placeholder="e.g., Nonverbal Autism, Rett Syndrome"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Can your child type on a laptop/keyboard?
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="can_type"
+                  checked={formData.can_type === true}
+                  onChange={() =>
+                    setFormData({ ...formData, can_type: true })
+                  }
+                  className="w-4 h-4 text-[#A2D2FF] focus:ring-[#A2D2FF] cursor-pointer"
+                />
+                <span className="ml-2 text-gray-700">Yes</span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="can_type"
+                  checked={formData.can_type === false}
+                  onChange={() =>
+                    setFormData({ ...formData, can_type: false })
+                  }
+                  className="w-4 h-4 text-[#A2D2FF] focus:ring-[#A2D2FF] cursor-pointer"
+                />
+                <span className="ml-2 text-gray-700">No</span>
+              </label>
+            </div>
           </div>
 
           {error && (

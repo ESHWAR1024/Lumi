@@ -55,3 +55,11 @@ __pycache__/
 
 
 
+
+# Kiro specs and temporary documentation
+.kiro/specs/
+INTEGRATION_VERIFICATION.md
+TEST_SUMMARY.md
+IMPLEMENTATION_SUMMARY.md
+FRONTEND_CHANGES_NEEDED.md
+FRONTEND_IMPLEMENTATION.md
