@@ -57,6 +57,7 @@ export default function StartPage() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const emotionRef = useRef<string>("");
+  const emotionHistoryRef = useRef<string[]>([]); // Track all detected emotions
 
   useEffect(() => {
     loadProfile();
@@ -120,6 +121,11 @@ export default function StartPage() {
       }
 
       if (data) {
+        // Check if child can type - if true, redirect to chat interface
+        if (data.can_type === true) {
+          router.push("/chat");
+          return;
+        }
         setChildProfile(data);
       } else {
         router.push("/onboarding");
@@ -153,6 +159,7 @@ export default function StartPage() {
       setConversationHistory([]);
       setInteractionDepth(1);
       emotionRef.current = ""; // Reset ref as well
+      emotionHistoryRef.current = []; // Reset emotion history
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -201,12 +208,33 @@ export default function StartPage() {
   };
 
   const stopCameraAndShowCards = async () => {
-    // Use ref to get the latest emotion value (avoids closure issue)
-    const currentEmotion = emotionRef.current;
+    // Get the most frequently detected emotion from history
+    const getMostFrequentEmotion = (emotions: string[]): string => {
+      if (emotions.length === 0) return "";
+      
+      const emotionCounts: { [key: string]: number } = {};
+      emotions.forEach(emotion => {
+        emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
+      });
+      
+      let maxCount = 0;
+      let mostFrequent = "";
+      Object.entries(emotionCounts).forEach(([emotion, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          mostFrequent = emotion;
+        }
+      });
+      
+      console.log("📊 Emotion frequency:", emotionCounts);
+      return mostFrequent;
+    };
+    
+    const currentEmotion = getMostFrequentEmotion(emotionHistoryRef.current);
     
     console.log("🛑 Stopping camera and fetching prompts...");
-    console.log("Current emotion from ref:", currentEmotion);
-    console.log("Current emotion from state:", emotion);
+    console.log("Most frequent emotion:", currentEmotion);
+    console.log("Emotion history:", emotionHistoryRef.current);
     console.log("Child profile:", childProfile);
     stopCamera();
     
@@ -222,8 +250,9 @@ export default function StartPage() {
       return;
     }
     
-    // Update state with the ref value to ensure consistency
+    // Update state with the most frequent emotion
     setEmotion(currentEmotion);
+    emotionRef.current = currentEmotion;
     
     console.log("✅ Conditions met, fetching prompts...");
     await fetchInitialPrompts(currentEmotion);
@@ -971,6 +1000,7 @@ export default function StartPage() {
           setEmotion(data.emotion);
           setConfidence(data.confidence);
           emotionRef.current = data.emotion; // Store in ref for countdown callback
+          emotionHistoryRef.current.push(data.emotion); // Track all emotions
         } else {
           console.warn("⚠️ Invalid response from emotion detection service:", data);
         }
@@ -1067,7 +1097,7 @@ export default function StartPage() {
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => {}}
+              onClick={startCamera}
               className="bg-gradient-to-r from-[#A2D2FF] to-[#FFC8DD] text-[#2E2E2E] font-semibold text-2xl w-32 h-32 rounded-full shadow-xl flex items-center justify-center"
             >
               Start

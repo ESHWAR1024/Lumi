@@ -1,5 +1,6 @@
 "use client";
 import { motion } from "framer-motion";
+import { getCardIcon } from "@/lib/cardIcons";
 
 interface PromptOption {
   label: string;
@@ -37,7 +38,7 @@ export default function PictureCards({ prompts, onSelect, emotion }: PictureCard
           >
             <div className="flex flex-col items-center gap-4">
               <div className="w-32 h-32 bg-gradient-to-br from-purple-200 to-pink-200 rounded-xl flex items-center justify-center">
-                <span className="text-6xl">🖼️</span>
+                <span className="text-7xl drop-shadow-lg">{getCardIcon(prompt.label)}</span>
               </div>
               <h4 className="text-2xl font-bold text-gray-800 text-center">
                 {prompt.label}
