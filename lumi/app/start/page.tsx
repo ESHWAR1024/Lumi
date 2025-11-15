@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import PictureCards from "../components/PictureCards";
 import ActionButtons from "../components/ActionButtons";
 import SolutionDisplay from "../components/SolutionDisplay";
+import { useEyeTracking } from "../hooks/useEyeTracking";
 
 const EMOTION_COLORS: { [key: string]: string } = {
   happy: "#FFD700",
@@ -50,6 +51,9 @@ export default function StartPage() {
   const [showActionButtons, setShowActionButtons] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [solution, setSolution] = useState("");
+  
+  // Eye tracking state
+  const [eyeTrackingEnabled, setEyeTrackingEnabled] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -875,6 +879,19 @@ export default function StartPage() {
     }
   };
 
+  // Eye tracking selection handler
+  const handleEyeTrackingSelect = (cardIndex: number) => {
+    if (prompts[cardIndex]) {
+      handleCardSelect(prompts[cardIndex].label);
+    }
+  };
+
+  // Eye tracking hook
+  const { gazeData, videoRef: eyeVideoRef, canvasRef: eyeCanvasRef, connected: eyeTrackingConnected } = useEyeTracking(
+    eyeTrackingEnabled && showCards,
+    handleEyeTrackingSelect
+  );
+
   const handleInitialDigDeeper = async () => {
     if (!childProfile) {
       console.error("❌ Cannot generate alternative prompts - childProfile is null");
@@ -1052,6 +1069,33 @@ export default function StartPage() {
           </div>
         )}
 
+        {/* Eye Tracking Toggle */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-3 text-gray-700">
+            👁️ Eye Tracking
+          </h3>
+          <div className="flex items-center justify-between bg-gradient-to-r from-purple-100 to-pink-100 p-4 rounded-lg">
+            <div>
+              <p className="font-medium text-sm">Hands-Free Mode</p>
+              <p className="text-xs text-gray-600">
+                {eyeTrackingConnected ? '🟢 Connected' : eyeTrackingEnabled ? '🟡 Connecting...' : '⚪ Disabled'}
+              </p>
+            </div>
+            <button
+              onClick={() => setEyeTrackingEnabled(!eyeTrackingEnabled)}
+              className={`w-14 h-8 rounded-full transition-colors ${
+                eyeTrackingEnabled ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <motion.div
+                className="w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ x: eyeTrackingEnabled ? 28 : 4 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              />
+            </button>
+          </div>
+        </div>
+
         <div>
           <h3 className="text-lg font-semibold mb-4 text-gray-700">
             📊 Weekly Reports
@@ -1208,6 +1252,7 @@ export default function StartPage() {
               prompts={prompts} 
               onSelect={handleCardSelect}
               emotion={emotion}
+              gazeData={eyeTrackingEnabled ? gazeData : null}
             />
             
             {promptType === "initial" && (
@@ -1325,6 +1370,10 @@ export default function StartPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Hidden video and canvas for eye tracking */}
+      <video ref={eyeVideoRef} className="hidden" autoPlay playsInline muted />
+      <canvas ref={eyeCanvasRef} className="hidden" />
     </div>
   );
 }

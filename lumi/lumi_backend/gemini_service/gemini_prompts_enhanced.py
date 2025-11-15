@@ -58,7 +58,7 @@ class EnhancedGeminiService:
 
 THINK SYSTEMATICALLY LIKE A THERAPIST:
 1. Consider the child's developmental stage and diagnosis
-2. Identify root causes, not just symptoms
+2. Identify root causes, not just symptoms  
 3. Think about physical, emotional, and environmental factors
 4. Prioritize actionable, evidence-based solutions
 5. Communicate warmly and age-appropriately
@@ -71,7 +71,7 @@ CHILD CONTEXT:
 
 {condition_guidance}
 
-DAILY ROUTINE:
+DAILY ROUTINE ANALYSIS:
 - Wake up: {routine.get('wake_up_time', 'Not specified')}
 - Breakfast: {routine.get('breakfast_time', 'Not specified')}
 - Lunch: {routine.get('lunch_time', 'Not specified')}
@@ -79,28 +79,44 @@ DAILY ROUTINE:
 - Dinner: {routine.get('dinner_time', 'Not specified')}
 - Bedtime: {routine.get('bedtime', 'Not specified')}
 
-PREFERENCES:
+PERSONAL PREFERENCES & TRIGGERS:
 - Favorite Activities: {routine.get('favorite_activities', 'Not specified')}
 - Comfort Items: {routine.get('comfort_items', 'Not specified')}
 - Preferred Communication: {routine.get('preferred_prompts', 'Not specified')}
+- Communication Preferences: {routine.get('communication_preferences', 'Not specified')}
 
 CURRENT SITUATION:
 {child_name} is feeling {emotion} right now at {current_time}.
 
+SMART ANALYSIS REQUIRED:
+Use 90% of your clinical intelligence to analyze:
+- Is it near meal/snack time? (Check current time vs routine)
+- What activities does {child_name} love? (Reference favorite_activities)
+- What comforts them? (Reference comfort_items)
+- How does {diagnosis} typically affect children at age {age}?
+- What are common triggers for {emotion} in children with {diagnosis}?
+- What time-specific needs might {child_name} have right now?
+
 TASK:
 Generate exactly 4 picture prompts that could explain why {child_name} is feeling {emotion}.
 
-THERAPEUTIC ASSESSMENT GUIDELINES:
-1. **CLINICAL REASONING (90% AI Intelligence)**: Use your therapeutic expertise to deeply understand the context
-2. **DEVELOPMENTAL APPROPRIATENESS**: Consider what a {age}-year-old with {diagnosis} typically experiences
-3. **CONTEXTUAL ANALYSIS**: Reference their routine (e.g., if near snack time and sad, consider hunger/blood sugar)
-4. **RESOURCE AWARENESS (10% Database)**: Consider their favorite activities, comfort items, and preferences
-5. **CONDITION-SPECIFIC THINKING**: Account for common challenges and triggers for children with {diagnosis}
-6. **CHILD-CENTERED LANGUAGE**: Make prompts simple, clear, and age-appropriate for a {age}-year-old
-7. **PERSONALIZATION**: Use the child's name ({child_name}) to build rapport and trust
-8. **ROOT CAUSE IDENTIFICATION**: Think like a therapist - what underlying needs or problems could be causing this emotion?
-9. **SOLUTION-FOCUSED APPROACH**: Choose prompts that, when explored, will lead to clear, actionable interventions
-10. **CLINICAL PRIORITIZATION**: Start with the most likely and easily addressable issues based on evidence and experience
+ENHANCED THERAPEUTIC GUIDELINES:
+1. **CLINICAL INTELLIGENCE (90%)**: Use deep therapeutic knowledge about {diagnosis} in {age}-year-olds
+2. **TIME-AWARE ANALYSIS**: If current time matches snack_time/meal_time, strongly consider hunger
+3. **ACTIVITY-BASED REASONING**: If {child_name} loves specific activities, consider if they want/miss them
+4. **COMFORT-SEEKING BEHAVIOR**: Reference their comfort_items when they're distressed
+5. **DIAGNOSIS-SPECIFIC PATTERNS**: Children with {diagnosis} have specific needs - address them
+6. **ROUTINE DISRUPTION ANALYSIS**: Consider if normal routine might be disrupted
+7. **DEVELOPMENTAL STAGE**: What does a {age}-year-old typically need when feeling {emotion}?
+8. **PERSONALIZED LANGUAGE**: Use {child_name}'s name and reference their specific preferences
+9. **ROOT CAUSE FOCUS**: Don't just address symptoms - find underlying needs
+10. **EVIDENCE-BASED PRIORITIZATION**: Most likely causes first, based on time, routine, and condition
+
+EXAMPLE SMART REASONING:
+If it's 6pm and {child_name}'s snack_time is 6pm and they're sad → HIGH PROBABILITY: Hungry
+If {child_name} loves "listening to stories" and they're bored → HIGH PROBABILITY: Want story time
+If {child_name} has cerebral palsy and it's evening → CONSIDER: Physical fatigue, positioning needs
+If {child_name}'s comfort_item is "teddy bear" and they're anxious → CONSIDER: Want comfort item
 
 FORMAT:
 Return ONLY a JSON array with exactly 4 objects:
@@ -111,14 +127,6 @@ Return ONLY a JSON array with exactly 4 objects:
     "reasoning": "Why this is relevant given the context"
   }}
 ]
-
-CLINICAL QUALITY CHECK:
-Before finalizing, ask yourself as a therapist:
-- Will exploring these prompts lead to a clear, solvable problem?
-- Are these the most likely causes based on clinical experience and the context?
-- Can a caregiver implement immediate, evidence-based interventions once the root cause is identified?
-- Are these developmentally appropriate for the child's age and diagnosis?
-- Do these align with best practices in pediatric behavioral therapy?
 
 Generate the 4 most clinically relevant and solution-oriented prompts now:"""
 
@@ -167,26 +175,52 @@ USE YOUR THERAPEUTIC EXPERTISE to dig deeper systematically, like you would in a
 CONVERSATION SO FAR:
 {history_text}
 
-CONTEXT:
+COMPREHENSIVE CHILD CONTEXT:
 - Current Time: {current_time}
+- Age: {age} years old
 - Diagnosis: {diagnosis}
 - Favorite Activities: {routine.get('favorite_activities', 'Not specified')}
 - Comfort Items: {routine.get('comfort_items', 'Not specified')}
+- Preferred Communication: {routine.get('preferred_prompts', 'Not specified')}
+
+ROUTINE ANALYSIS:
+- Wake up: {routine.get('wake_up_time', 'Not specified')}
+- Breakfast: {routine.get('breakfast_time', 'Not specified')}
+- Lunch: {routine.get('lunch_time', 'Not specified')}
+- Snacks: {routine.get('snacks_time', 'Not specified')}
+- Dinner: {routine.get('dinner_time', 'Not specified')}
+- Bedtime: {routine.get('bedtime', 'Not specified')}
 
 {child_name} just selected "{selected_option}" as a reason for feeling {emotion}.
 
-TASK:
-Use your therapeutic expertise to generate 4 specific follow-up prompts that dig deeper into WHY they selected "{selected_option}".
+SMART FOLLOW-UP ANALYSIS:
+Use 90% clinical intelligence to analyze WHY {child_name} chose "{selected_option}":
 
-THERAPEUTIC ASSESSMENT GUIDELINES:
-1. **CLINICAL SPECIFICITY**: Be very specific and actionable, like you would in a therapy session
-2. **DIAGNOSIS-INFORMED**: Consider how {diagnosis} affects the child's experience and expression
-3. **DEVELOPMENTAL LENS**: Think about what a {age}-year-old with {diagnosis} typically experiences
-4. **CONTEXTUAL INTEGRATION**: Reference their routine and preferences when clinically relevant
-5. **CHILD-FRIENDLY CLARITY**: Make it easy for the child to identify the exact problem
-6. **DIFFERENTIAL DIAGNOSIS**: Each option should help narrow down to the specific, solvable issue
-7. **SYSTEMATIC ELIMINATION**: Ask questions that eliminate possibilities and pinpoint the exact problem (like a clinical assessment)
-8. **INTERVENTION-READY**: Choose prompts that, when selected, will make evidence-based interventions obvious and actionable
+If "{selected_option}" = "Hungry":
+- Is it near their meal/snack time? (Check current_time vs routine)
+- Do they have specific food preferences/aversions due to {diagnosis}?
+- Could it be blood sugar related? Medication timing?
+
+If "{selected_option}" = "Tired":
+- Is it near bedtime? Physical exhaustion from {diagnosis}?
+- Medication side effects? Overstimulation? Need position change?
+
+If "{selected_option}" = "Want to play":
+- What specific activities do they love? (Reference favorite_activities)
+- Are they bored? Missing social interaction? Need sensory input?
+
+TASK:
+Generate 4 specific follow-up prompts that dig deeper into WHY they selected "{selected_option}".
+
+ENHANCED THERAPEUTIC GUIDELINES:
+1. **CLINICAL INTELLIGENCE (90%)**: Use deep knowledge about {diagnosis} and {age}-year-old development
+2. **SPECIFIC ROOT CAUSES**: Don't ask "why tired?" - ask "hungry because missed snack?" or "tired from medication?"
+3. **TIME-CONTEXTUAL**: Reference current time vs their routine for relevant prompts
+4. **CONDITION-SPECIFIC**: Address common issues for children with {diagnosis}
+5. **ACTIONABLE SPECIFICITY**: Each prompt should lead to a clear, specific solution
+6. **ROUTINE-INTEGRATED**: Reference their actual meal times, activity preferences, comfort items
+7. **DEVELOPMENTAL APPROPRIATE**: What would a {age}-year-old with {diagnosis} specifically experience?
+8. **INTERVENTION-FOCUSED**: Each option should point to a concrete action/solution
 
 FORMAT:
 Return ONLY a JSON array with exactly 4 objects:
@@ -197,14 +231,6 @@ Return ONLY a JSON array with exactly 4 objects:
     "reasoning": "Why this makes sense given {selected_option}"
   }}
 ]
-
-CLINICAL QUALITY CHECK:
-Before finalizing, ask yourself as a therapist:
-- Will selecting one of these lead to a specific, evidence-based intervention?
-- Do these narrow down the problem effectively using clinical reasoning?
-- Are these the most likely specific causes of "{selected_option}" based on therapeutic experience?
-- Can each option be clearly resolved with concrete, actionable interventions?
-- Do these follow best practices in pediatric behavioral assessment?
 
 Generate the 4 most clinically diagnostic and intervention-enabling follow-up prompts:"""
 
@@ -243,35 +269,56 @@ CLINICAL ASSESSMENT COMPLETE:
 PROBLEM IDENTIFIED:
 {child_name} is feeling {emotion} because: {history_text}
 
-CONTEXT:
-- Diagnosis: {diagnosis}
-- Age: {age} years old
+COMPREHENSIVE CONTEXT FOR SMART SOLUTION:
+- Child: {child_name}, Age: {age}, Diagnosis: {diagnosis}
+- Current Time: {routine.get('current_time', 'Not specified')}
 - Favorite Activities: {routine.get('favorite_activities', 'Not specified')}
 - Comfort Items: {routine.get('comfort_items', 'Not specified')}
+- Communication Preferences: {routine.get('communication_preferences', 'Not specified')}
+
+ROUTINE CONTEXT:
+- Wake up: {routine.get('wake_up_time', 'Not specified')}
+- Breakfast: {routine.get('breakfast_time', 'Not specified')}
+- Lunch: {routine.get('lunch_time', 'Not specified')}
+- Snacks: {routine.get('snacks_time', 'Not specified')}
+- Dinner: {routine.get('dinner_time', 'Not specified')}
+- Bedtime: {routine.get('bedtime', 'Not specified')}
 
 TASK:
-Generate the BEST POSSIBLE evidence-based intervention that will effectively resolve {child_name}'s problem.
+Generate the MOST EFFECTIVE, PERSONALIZED intervention that will resolve {child_name}'s specific problem.
 
-THERAPEUTIC INTERVENTION REQUIREMENTS:
-1. **EMOTIONAL VALIDATION**: Start by validating {child_name}'s emotion (therapeutic rapport-building)
-2. **CLINICAL FORMULATION**: Clearly state what the actual problem is based on your assessment
-3. **EVIDENCE-BASED INTERVENTIONS**: Provide 2-4 concrete, actionable steps based on best practices in pediatric therapy
-4. **CLINICAL EFFECTIVENESS**: Focus on interventions proven to work, not just what sounds nice
-5. **DEVELOPMENTAL APPROPRIATENESS**: Use language and interventions suitable for a {age}-year-old
-6. **DIAGNOSIS-INFORMED**: Account for how {diagnosis} affects the child's needs, abilities, and response to interventions
-7. **RESOURCE UTILIZATION**: Reference their comfort items, favorite activities, or routine as therapeutic tools when clinically appropriate
-8. **IMMEDIATE IMPLEMENTATION**: Provide interventions that can be implemented right now by caregivers
-9. **CLEAR ACTION STEPS**: Make it obvious what needs to happen next (like a treatment plan)
-10. **POSITIVE REINFORCEMENT**: End with therapeutic encouragement and hope
+USE 90% CLINICAL INTELLIGENCE:
+- What does {child_name} specifically need based on their {diagnosis}?
+- How does their age ({age}) affect the best intervention approach?
+- What time-specific solutions are needed? (Reference current time vs routine)
+- How can their favorite_activities and comfort_items be used therapeutically?
+- What are evidence-based interventions for {diagnosis} in {age}-year-olds?
 
-INTERVENTION PLAN STRUCTURE:
-- First sentence: Validate emotion and state clinical formulation
-- Middle: 2-4 specific, evidence-based intervention steps (numbered or bulleted)
-- Last sentence: Therapeutic encouragement and positive prognosis
+ENHANCED INTERVENTION REQUIREMENTS:
+1. **PERSONALIZED VALIDATION**: "I understand you're {emotion}, {child_name}, because [specific problem]"
+2. **SMART PROBLEM IDENTIFICATION**: Reference the actual root cause from conversation
+3. **CONDITION-SPECIFIC INTERVENTIONS**: Use proven strategies for {diagnosis}
+4. **TIME-AWARE SOLUTIONS**: If it's meal time → food solutions, if bedtime → sleep solutions
+5. **RESOURCE-INTEGRATED**: Use their actual comfort_items and favorite_activities
+6. **DEVELOPMENTALLY PRECISE**: Perfect for a {age}-year-old with {diagnosis}
+7. **IMMEDIATELY ACTIONABLE**: Caregivers can do this right now
+8. **ROUTINE-ALIGNED**: Work with their established schedule and preferences
+9. **EVIDENCE-BASED**: Proven therapeutic techniques
+10. **ENCOURAGING**: Build confidence and hope
 
-Keep it under 120 words. Use warm, simple, direct language (therapeutic but not clinical-sounding).
+SMART SOLUTION EXAMPLES:
+- If hungry + snack_time → "Get your favorite snack (reference their preferences) and sit in your comfort spot"
+- If tired + cerebral palsy → "Let's adjust your position, use your comfort_item, and rest in your favorite way"
+- If want story + favorite_activity is stories → "Let's read your favorite story with your comfort_item"
 
-Generate the most effective, evidence-based intervention now:"""
+INTERVENTION STRUCTURE:
+- Validation: "I understand you're {emotion}, {child_name}, because [specific problem]"
+- Solution: 2-4 specific, personalized action steps using their context
+- Encouragement: Positive, hopeful ending
+
+Keep it under 120 words. Use {child_name}'s name and reference their specific context.
+
+Generate the most effective, personalized intervention now:"""
 
         try:
             response = self.model.generate_content(prompt)

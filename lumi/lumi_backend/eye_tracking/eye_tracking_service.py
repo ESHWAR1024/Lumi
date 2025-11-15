@@ -43,7 +43,21 @@ CHIN = 152
 # Gaze tracking state
 current_card: Optional[int] = None
 gaze_start_time: Optional[float] = None
-DWELL_TIME = 1.5  # seconds to select
+DWELL_TIME = 2.0  # seconds to select (increased for more deliberate selection)
+
+# IMPROVED: Transition logic to prevent accidental selections
+transition_card: Optional[int] = None
+transition_start_time: Optional[float] = None
+TRANSITION_TIME = 0.3  # seconds to confirm card change
+
+# Improved calibration and smoothing parameters
+CALIBRATION_OFFSET_X = 0.05
+SMOOTHING_FACTOR_ALPHA = 0.3
+SENSITIVITY = 18.0
+
+# Smoothing variables
+smoothed_x = 0.5
+smoothed_y = 0.5
 
 
 def get_iris_center(landmarks, iris_indices):
@@ -55,70 +69,86 @@ def get_iris_center(landmarks, iris_indices):
 
 def calculate_combined_gaze(landmarks):
     """
-    Combine head pose and eye position for gaze detection
+    IMPROVED: Combine head pose and eye position for gaze detection with smoothing
     Returns (x, y) coordinates normalized to 0-1
+    Based on newtrack.py improvements
     """
-    # Get face reference points
-    nose = landmarks[NOSE_TIP]
-    forehead = landmarks[FOREHEAD]
-    chin = landmarks[CHIN]
-    left_eye_inner = landmarks[LEFT_EYE_INNER]
-    right_eye_inner = landmarks[RIGHT_EYE_INNER]
-    left_eye_outer = landmarks[LEFT_EYE_OUTER]
-    right_eye_outer = landmarks[RIGHT_EYE_OUTER]
+    global smoothed_x, smoothed_y
     
-    # Get iris positions
+    # Shared Landmarks
+    nose = landmarks[NOSE_TIP]
     left_iris_x, left_iris_y = get_iris_center(landmarks, LEFT_IRIS)
     right_iris_x, right_iris_y = get_iris_center(landmarks, RIGHT_IRIS)
     
-    # === HORIZONTAL DETECTION (Left-Right) ===
+    # ---------------- 1. X-AXIS (Horizontal, Eye-Dominant Logic) ----------------
+    left_eye_outer = landmarks[LEFT_EYE_OUTER]
+    right_eye_outer = landmarks[RIGHT_EYE_OUTER]
+    
     face_width = abs(left_eye_outer.x - right_eye_outer.x)
-    face_center_x = (left_eye_inner.x + right_eye_inner.x) / 2
     
-    left_eye_center_x = (left_eye_inner.x + left_eye_outer.x) / 2
-    right_eye_center_x = (right_eye_inner.x + right_eye_outer.x) / 2
+    # Calculate key centers
+    left_eye_center = (landmarks[LEFT_EYE_INNER].x + landmarks[LEFT_EYE_OUTER].x) / 2
+    right_eye_center = (landmarks[RIGHT_EYE_INNER].x + landmarks[RIGHT_EYE_OUTER].x) / 2
+    face_center_x = (landmarks[LEFT_EYE_INNER].x + landmarks[RIGHT_EYE_INNER].x) / 2
     
-    left_gaze_offset = (left_iris_x - left_eye_center_x) / face_width
-    right_gaze_offset = (right_iris_x - right_eye_center_x) / face_width
-    eye_gaze_x = (left_gaze_offset + right_gaze_offset) / 2
-    
+    # Calculate offsets
+    left_offset_x = (left_iris_x - left_eye_center) / face_width
+    right_offset_x = (right_iris_x - right_eye_center) / face_width
+    eye_gaze_x = (left_offset_x + right_offset_x) / 2
     head_offset_x = (nose.x - face_center_x) / face_width
     
-    # Combine eye and head movement
-    combined_x_raw = 0.5 + (eye_gaze_x * 0.7) + (head_offset_x * 0.3)
-    combined_x = 0.5 + (combined_x_raw - 0.5) * 10.0
+    # X-Fusion: W_E=0.75, W_H=0.25 (IMPROVED: More eye-dominant)
+    combined_x_raw = 0.5 + eye_gaze_x * 0.75 + head_offset_x * 0.25
+    combined_x = 0.5 + (combined_x_raw - 0.5) * SENSITIVITY - CALIBRATION_OFFSET_X
     combined_x = max(0, min(1, combined_x))
     
-    # === VERTICAL DETECTION (Up-Down) ===
+    # ---------------- 2. Y-AXIS (Vertical, Head-Dominant Logic) ----------------
+    forehead = landmarks[FOREHEAD]
+    chin = landmarks[CHIN]
+    
     face_height = abs(forehead.y - chin.y)
     face_center_y = (forehead.y + chin.y) / 2
     
     iris_y = (left_iris_y + right_iris_y) / 2
+    
     eye_gaze_y = (iris_y - face_center_y) / face_height
     head_offset_y = (nose.y - face_center_y) / face_height
     
-    # Combine with head tilt focus
+    # Y-Fusion: W_E=0.3, W_H=0.7 (Head-dominant for vertical)
     combined_y_raw = 0.5 + (eye_gaze_y * 0.3) + (head_offset_y * 0.7)
-    combined_y = 0.5 + (combined_y_raw - 0.5) * 15.0
+    
+    combined_y = 0.5 + (combined_y_raw - 0.5) * SENSITIVITY
     combined_y = max(0, min(1, combined_y))
     
-    return combined_x, combined_y
+    # ---------------- 3. Smoothing (IMPROVED: Alpha filter) ----------------
+    smoothed_x = SMOOTHING_FACTOR_ALPHA * combined_x + (1 - SMOOTHING_FACTOR_ALPHA) * smoothed_x
+    smoothed_y = SMOOTHING_FACTOR_ALPHA * combined_y + (1 - SMOOTHING_FACTOR_ALPHA) * smoothed_y
+    
+    return smoothed_x, smoothed_y
 
 
 def map_gaze_to_card(gaze_x, gaze_y, num_cards=4):
     """
-    Map gaze coordinates to card index
-    Assumes cards are in a single row (4 cards)
+    IMPROVED: Map gaze coordinates to card index for 2x2 grid
+    Cards are arranged as:
+    [0] [1]
+    [2] [3]
     """
-    # For 4 cards in a row
-    if gaze_x < 0.25:
-        return 0
-    elif gaze_x < 0.50:
-        return 1
-    elif gaze_x < 0.75:
-        return 2
+    # Map X-axis to 2 columns (0, 1) - boundary at 0.5
+    if gaze_x < 0.5:
+        col = 0
     else:
-        return 3
+        col = 1
+    
+    # Map Y-axis to 2 rows (0, 1) - boundary at 0.5
+    if gaze_y < 0.5:
+        row = 0
+    else:
+        row = 1
+    
+    # Calculate final 0-3 index: Index = (Row * 2) + Column
+    detected_index = (row * 2) + col
+    return detected_index
 
 
 @app.get("/")
@@ -139,9 +169,11 @@ async def eye_tracking_websocket(websocket: WebSocket):
     await websocket.accept()
     print("✅ Eye tracking WebSocket connected")
     
-    global current_card, gaze_start_time
+    global current_card, gaze_start_time, transition_card, transition_start_time
     current_card = None
     gaze_start_time = None
+    transition_card = None
+    transition_start_time = None
     
     try:
         while True:
@@ -166,18 +198,45 @@ async def eye_tracking_websocket(websocket: WebSocket):
                     # Calculate gaze
                     gaze_x, gaze_y = calculate_combined_gaze(landmarks)
                     
-                    # Map to card (4 cards)
+                    # Map to card (4 cards in 2x2 grid)
                     detected_card = map_gaze_to_card(gaze_x, gaze_y, num_cards=4)
                     
-                    # Dwell time logic
+                    # IMPROVED: Dwell and Transition Logic
                     import time
                     current_time = time.time()
+                    progress = 0
                     
-                    if current_card != detected_card:
+                    if current_card is None:
+                        # First detection
                         current_card = detected_card
                         gaze_start_time = current_time
                         progress = 0
+                        
+                    elif current_card != detected_card:
+                        # Looking at different card - start transition
+                        if transition_card != detected_card:
+                            # New transition target
+                            transition_card = detected_card
+                            transition_start_time = current_time
+                            progress = 0
+                        else:
+                            # Continuing to look at transition target
+                            elapsed = current_time - transition_start_time
+                            if elapsed >= TRANSITION_TIME:
+                                # Transition confirmed - switch cards
+                                current_card = detected_card
+                                gaze_start_time = current_time
+                                transition_card = None
+                                transition_start_time = None
+                                progress = 0
+                            else:
+                                # Still in transition
+                                progress = 0
                     else:
+                        # Looking at current card - check for selection
+                        transition_card = None
+                        transition_start_time = None
+                        
                         if gaze_start_time:
                             elapsed = current_time - gaze_start_time
                             progress = min(100, int((elapsed / DWELL_TIME) * 100))
@@ -193,22 +252,22 @@ async def eye_tracking_websocket(websocket: WebSocket):
                                 current_card = None
                                 gaze_start_time = None
                                 continue
-                        else:
-                            progress = 0
                     
                     # Send gaze data
                     await websocket.send_json({
                         "type": "gaze",
-                        "card_index": detected_card,
+                        "card_index": current_card if current_card is not None else detected_card,
                         "progress": progress,
                         "gaze_x": gaze_x,
                         "gaze_y": gaze_y,
                         "face_detected": True
                     })
                 else:
-                    # No face detected
+                    # No face detected - reset everything
                     current_card = None
                     gaze_start_time = None
+                    transition_card = None
+                    transition_start_time = None
                     await websocket.send_json({
                         "type": "gaze",
                         "face_detected": False
