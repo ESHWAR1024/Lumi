@@ -2,44 +2,61 @@ import torch
 from torchvision import transforms
 from PIL import Image
 import io
-from .model import get_resnet, SimpleCNN, get_efficientnetv2   # FIXED IMPORT
+from .model import get_resnet, SimpleCNN, get_efficientnetv2
+from .model_advanced import get_model as get_advanced_model
 
 from .dataset import CLASS_NAMES, get_transforms
 import numpy as np
 import cv2
 
 
-def load_model(path, device='cpu', arch='resnet'):
+def load_model(path, device='cpu', arch='resnet', model_size='s'):
     """
     Load trained model from checkpoint.
     
     Args:
         path: Path to model checkpoint (.pt file)
         device: Device to load model on ('cpu' or 'cuda')
-        arch: Architecture type ('resnet', 'efficientnet', or 'simple')
+        arch: Architecture type ('resnet', 'efficientnet', 'efficientnetv2', or 'simple')
+        model_size: Model size for efficientnet ('s', 'm', 'l')
     
     Returns:
         Loaded model in evaluation mode
     """
 
-    # FIXED — efficientnet now uses get_efficientnetv2
     if arch == 'resnet':
         model = get_resnet(len(CLASS_NAMES), pretrained=False)
 
     elif arch == 'efficientnet':
-        # EfficientNet wrapper → maps to v2 (your correct model)
-        model = get_efficientnetv2(len(CLASS_NAMES), pretrained=False)
+        # Standard EfficientNet
+        model = get_efficientnetv2(len(CLASS_NAMES), pretrained=False, model_size=model_size)
+
+    elif arch == 'efficientnetv2':
+        # Advanced EfficientNetV2 with attention (for FER+ model)
+        model = get_advanced_model('efficientnetv2', num_classes=len(CLASS_NAMES), pretrained=False)
 
     elif arch == 'simple':
         model = SimpleCNN(len(CLASS_NAMES))
 
     else:
         raise ValueError(
-            f"Unknown architecture: {arch}. Choose from 'resnet', 'efficientnet', or 'simple'"
+            f"Unknown architecture: {arch}. Choose from 'resnet', 'efficientnet', 'efficientnetv2', or 'simple'"
         )
     
-    checkpoint = torch.load(path, map_location=device)
-    model.load_state_dict(checkpoint['model_state'])
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    
+    # Handle different checkpoint formats
+    if 'model_state' in checkpoint:
+        state_dict = checkpoint['model_state']
+    elif 'model_state_dict' in checkpoint:
+        state_dict = checkpoint['model_state_dict']
+    elif 'state_dict' in checkpoint:
+        state_dict = checkpoint['state_dict']
+    else:
+        # Assume the checkpoint is the state dict itself
+        state_dict = checkpoint
+    
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
 
