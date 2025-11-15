@@ -138,16 +138,21 @@ export default function OnboardingPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Condition/Diagnosis
             </label>
-            <input
-              type="text"
+            <select
               required
               value={formData.condition}
               onChange={(e) =>
                 setFormData({ ...formData, condition: e.target.value })
               }
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#A2D2FF] focus:border-transparent outline-none text-black"
-              placeholder="e.g., Nonverbal Autism, Rett Syndrome"
-            />
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#A2D2FF] focus:border-transparent outline-none text-black bg-white"
+            >
+              <option value="">Select a condition</option>
+              <option value="Non-verbal Autism">Non-verbal Autism</option>
+              <option value="Cerebral Palsy">Cerebral Palsy</option>
+              <option value="Rett Syndrome">Rett Syndrome</option>
+              <option value="Childhood Epileptic Encephalopathy">Childhood Epileptic Encephalopathy</option>
+              <option value="ADHD">ADHD</option>
+            </select>
           </div>
 
           <div>

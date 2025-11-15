@@ -354,5 +354,114 @@ async def regenerate_solution(request: RegenerateSolutionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to regenerate solution: {str(e)}")
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: List[ChatMessage]
+    child_profile: ChildProfile
+    child_routine: ChildRoutine | None = None
+
+
+class ChatResponse(BaseModel):
+    response: str
+
+
+@app.post('/api/chat', response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    Smart chatbot endpoint for children who can type.
+    90% general AI intelligence, 10% personalized based on child profile and routine.
+    """
+    if gemini_service is None:
+        raise HTTPException(status_code=503, detail="Gemini service not configured")
+    
+    try:
+        # Build conversation context
+        conversation_context = "\n".join([
+            f"{msg.role.capitalize()}: {msg.content}" 
+            for msg in request.conversation_history[-10:]  # Last 10 messages for context
+        ])
+        
+        # Build child context (10% personalization) with condition-specific knowledge
+        from condition_profiles import get_condition_context
+        
+        condition_context = get_condition_context(
+            request.child_profile.diagnosis or "General",
+            request.child_profile.age
+        )
+        
+        child_context = f"""
+You are Lumi, a warm, empathetic AI companion chatting with {request.child_profile.child_name}, 
+a {request.child_profile.age}-year-old child"""
+        
+        if request.child_profile.diagnosis:
+            child_context += f" with {request.child_profile.diagnosis}"
+            
+            # Add condition-specific communication style
+            if condition_context and condition_context.get('communication_style'):
+                child_context += f"\n\nCommunication Style: {condition_context['communication_style']}"
+                
+                # Add communication preferences
+                if condition_context.get('communication_preferences'):
+                    prefs = condition_context['communication_preferences'][:2]
+                    child_context += f"\nCommunication Tips: {', '.join(prefs)}"
+        
+        child_context += "."
+        
+        # Add routine context if available (subtle, not dominant)
+        routine_hints = ""
+        if request.child_routine:
+            current_hour = datetime.now().hour
+            if request.child_routine.breakfast_time and 6 <= current_hour < 10:
+                routine_hints = " (It's around breakfast time)"
+            elif request.child_routine.lunch_time and 11 <= current_hour < 14:
+                routine_hints = " (It's around lunch time)"
+            elif request.child_routine.dinner_time and 17 <= current_hour < 20:
+                routine_hints = " (It's around dinner time)"
+            elif request.child_routine.bedtime and 19 <= current_hour < 23:
+                routine_hints = " (It's getting close to bedtime)"
+        
+        # Create the prompt (90% general intelligence, 10% personalization)
+        prompt = f"""{child_context}{routine_hints}
+
+You are having a natural, friendly conversation. Be:
+- Warm, supportive, and understanding
+- Age-appropriate and engaging
+- A good listener who asks thoughtful follow-up questions
+- Helpful without being preachy
+- Encouraging and positive
+- Able to discuss any topic the child brings up
+
+Recent conversation:
+{conversation_context}
+
+Child's message: {request.message}
+
+Respond naturally as Lumi. Keep responses conversational (2-4 sentences usually). 
+Be genuinely interested in what the child is saying. Don't always give advice - sometimes just listen and validate their feelings."""
+
+        # Use Gemini to generate response
+        import google.generativeai as genai
+        
+        # Get next API key
+        api_key = gemini_service.get_next_api_key()
+        genai.configure(api_key=api_key)
+        
+        # Use Gemini 2.5 Flash
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        
+        return ChatResponse(response=response.text)
+    
+    except Exception as e:
+        print(f"❌ Error in chat endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(e)}")
+
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host='0.0.0.0', port=8001)
