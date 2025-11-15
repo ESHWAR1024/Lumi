@@ -129,26 +129,28 @@ def calculate_combined_gaze(landmarks):
 
 def map_gaze_to_card(gaze_x, gaze_y, num_cards=4):
     """
-    IMPROVED: Map gaze coordinates to card index for 2x2 grid
-    Cards are arranged as:
-    [0] [1]
-    [2] [3]
+    IMPROVED: Map gaze coordinates to card index for VERTICAL layout
+    Cards are arranged vertically (1 column, 4 rows):
+    [0]
+    [1]
+    [2]
+    [3]
+    
+    This is MUCH more accurate for eye tracking because:
+    - Only Y-axis matters (simpler tracking)
+    - Larger hit zones (full width)
+    - Less ambiguity (no left/right confusion)
     """
-    # Map X-axis to 2 columns (0, 1) - boundary at 0.5
-    if gaze_x < 0.5:
-        col = 0
+    # Only use Y-axis for vertical layout
+    # Divide screen into 4 equal vertical zones
+    if gaze_y < 0.25:
+        return 0  # Top card
+    elif gaze_y < 0.5:
+        return 1  # Second card
+    elif gaze_y < 0.75:
+        return 2  # Third card
     else:
-        col = 1
-    
-    # Map Y-axis to 2 rows (0, 1) - boundary at 0.5
-    if gaze_y < 0.5:
-        row = 0
-    else:
-        row = 1
-    
-    # Calculate final 0-3 index: Index = (Row * 2) + Column
-    detected_index = (row * 2) + col
-    return detected_index
+        return 3  # Bottom card
 
 
 @app.get("/")
