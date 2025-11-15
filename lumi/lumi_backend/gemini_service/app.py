@@ -110,6 +110,15 @@ class RegenerateSolutionRequest(BaseModel):
     child_routine: ChildRoutine
 
 
+class RegenerateProblemsRequest(BaseModel):
+    session_id: str
+    emotion: str
+    previous_problems: list[str]
+    child_profile: ChildProfile
+    child_routine: ChildRoutine
+    current_time: str
+
+
 class PromptOption(BaseModel):
     label: str
     description: str
@@ -182,6 +191,96 @@ async def get_initial_prompts(request: InitialPromptsRequest):
     except Exception as e:
         print(f"❌ Error generating initial prompts: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate prompts: {str(e)}")
+
+
+@app.post('/api/prompts/regenerate-problems', response_model=PromptsResponse)
+async def regenerate_problems(request: RegenerateProblemsRequest):
+    """
+    Regenerate 4 new initial problem cards that are different from previously shown ones.
+    Uses the same emotion but generates alternative problems to help child find the right match.
+    """
+    if gemini_service is None:
+        raise HTTPException(status_code=503, detail="Gemini service not configured")
+    
+    try:
+        # Build a prompt to generate NEW problems that avoid previous ones
+        prompt = f"""You are an expert pediatric behavioral therapist helping {request.child_profile.child_name} ({request.child_profile.age} years old, {request.child_profile.diagnosis or 'Not specified'}) identify why they feel {request.emotion}.
+
+The child has already seen these problem options but none of them felt right:
+{chr(10).join(f'- {p}' for p in request.previous_problems)}
+
+YOUR TASK: Generate 4 COMPLETELY DIFFERENT initial problem cards for the emotion "{request.emotion}".
+
+REQUIREMENTS:
+1. **MUST BE DIFFERENT**: None of the 4 new cards should overlap with or be too similar to the previous problems listed above
+2. **STAY ON EMOTION**: All 4 cards must be valid reasons for feeling {request.emotion}
+3. **BE SPECIFIC**: Use concrete, observable situations a {request.child_profile.age}-year-old might experience
+4. **USE CONTEXT**: Consider current time ({request.current_time}) and their routine/preferences
+5. **BE AGE-APPROPRIATE**: Language suitable for {request.child_profile.age}-year-old with {request.child_profile.diagnosis or 'general needs'}
+
+CHILD CONTEXT:
+- Current Time: {request.current_time}
+- Age: {request.child_profile.age} years old
+- Diagnosis: {request.child_profile.diagnosis or 'Not specified'}
+- Favorite Activities: {request.child_routine.favorite_activities or 'Not specified'}
+- Comfort Items: {request.child_routine.comfort_items or 'Not specified'}
+
+ROUTINE TIMES:
+- Wake up: {request.child_routine.wake_up_time or 'Not specified'}
+- Breakfast: {request.child_routine.breakfast_time or 'Not specified'}
+- Lunch: {request.child_routine.lunch_time or 'Not specified'}
+- Snacks: {request.child_routine.snacks_time or 'Not specified'}
+- Dinner: {request.child_routine.dinner_time or 'Not specified'}
+- Bedtime: {request.child_routine.bedtime or 'Not specified'}
+
+Generate 4 alternative problem cards that explore DIFFERENT aspects of {request.emotion}.
+
+Return ONLY a JSON array with exactly 4 objects:
+[
+  {{
+    "label": "Problem label (3-5 words)",
+    "description": "Clear, simple description for {request.child_profile.child_name}",
+    "reasoning": "Why this is a valid reason for {request.emotion}"
+  }}
+]
+
+Generate the 4 NEW problem cards now:"""
+
+        import google.generativeai as genai
+        
+        # Get next API key
+        api_key = gemini_service.get_next_api_key()
+        genai.configure(api_key=api_key)
+        
+        # Use Gemini 2.5 Flash
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        
+        # Clean and parse response
+        response_text = response.text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
+        
+        import json
+        prompts = json.loads(response_text)
+        
+        if len(prompts) != 4:
+            raise ValueError(f"Expected 4 prompts, got {len(prompts)}")
+        
+        return PromptsResponse(
+            session_id=request.session_id,
+            prompts=[PromptOption(**p) for p in prompts],
+            prompt_type="initial"
+        )
+    
+    except Exception as e:
+        print(f"❌ Error regenerating problems: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate problems: {str(e)}")
 
 
 @app.post('/api/prompts/followup', response_model=PromptsResponse)
@@ -368,6 +467,19 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+
+class DailySummaryRequest(BaseModel):
+    child_profile_id: str
+    date: str  # YYYY-MM-DD format
+    session_summaries: List[str]
+    child_name: str
+
+
+class DailySummaryResponse(BaseModel):
+    success: bool
+    summary: str
+    session_count: int
 
 
 @app.post('/api/chat', response_model=ChatResponse)

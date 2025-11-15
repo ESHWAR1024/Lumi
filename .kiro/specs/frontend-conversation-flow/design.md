@@ -4,7 +4,7 @@
 
 The frontend conversation flow integrates with the existing Lumi emotion detection system to create a complete interactive experience. The design builds upon the already-implemented camera and emotion detection features, adding multi-level AI conversation capabilities with context-aware prompts and personalized solutions.
 
-The system follows a state-driven architecture where the UI transitions through distinct phases: emotion detection → initial prompts → follow-up prompts → action decision → solution delivery. Each phase is managed through React state and animated transitions using Framer Motion.
+The system follows a state-driven architecture where the UI transitions through distinct phases: emotion detection → 4 initial problem cards → 4 follow-up cards → action decision (dig deeper/proceed) → solution delivery → feedback (helps/not satisfied) → session reset. Each stage presents exactly 4 picture cards to help narrow down the problem. Users can regenerate the problem list if their issue isn't shown. Each phase is managed through React state and animated transitions using Framer Motion.
 
 ## Architecture
 
@@ -14,7 +14,8 @@ The system follows a state-driven architecture where the UI transitions through 
 StartPage (Main Container)
 ├── Camera/Video Display (Existing)
 ├── Emotion Detection Display (Existing)
-├── PictureCards Component (Existing)
+├── PictureCards Component (Existing - displays 4 cards)
+├── RegenerateButton Component (New - for problem list regeneration)
 ├── ActionButtons Component (New - Already Created)
 ├── SolutionDisplay Component (New - Already Created)
 └── Loading States
@@ -38,12 +39,14 @@ The application uses React's useState hooks for local state management with the 
 
 **Conversation Flow States:**
 - `showCards`: Boolean to display PictureCards
-- `prompts`: Array of PromptOption objects
+- `prompts`: Array of exactly 4 PromptOption objects
+- `previousProblems`: Array of previously shown problem labels (for regeneration)
 - `sessionId`: UUID for current session
 - `promptType`: "initial" | "followup" to track conversation level
 - `loadingPrompts`: Loading state for API calls
 - `conversationHistory`: Array of user selections
 - `interactionDepth`: Counter for conversation depth
+- `showRegenerateButton`: Boolean to show problem regeneration option
 
 **Action & Solution States:**
 - `showActionButtons`: Boolean to display ActionButtons component
@@ -55,22 +58,24 @@ The application uses React's useState hooks for local state management with the 
 ```mermaid
 graph TD
     A[Camera Start] --> B[Emotion Detection]
-    B --> C[Fetch Initial Prompts]
-    C --> D[Display PictureCards]
-    D --> E{User Selects Card}
-    E --> F[Fetch Follow-up Prompts]
-    F --> G[Display Follow-up Cards]
+    B --> C[Fetch 4 Initial Problem Cards]
+    C --> D[Display 4 Problem Cards + Regenerate Button]
+    D --> E{User Action}
+    E -->|Selects Card| F[Fetch 4 Follow-up Cards]
+    E -->|Regenerate Problems| C
+    F --> G[Display 4 Follow-up Cards]
     G --> H{User Selects Card}
     H --> I[Show Action Buttons]
     I --> J{User Choice}
-    J -->|Dig Deeper| K[Fetch Dig Deeper Prompts]
+    J -->|Dig Deeper| K[Fetch 4 New Dig Deeper Cards]
     K --> G
     J -->|Proceed to Solution| L[Generate Solution]
-    L --> M[Display Solution]
+    L --> M[Display Solution with Feedback Buttons]
     M --> N{User Feedback}
-    N -->|Satisfied| O[Save Session & Complete]
+    N -->|This Helps| O[Save Session & Reset to Start]
     N -->|Not Satisfied| P[Regenerate Solution]
     P --> M
+    O --> A
 ```
 
 ## Components and Interfaces
@@ -101,24 +106,35 @@ fetchInitialPrompts(): Promise<void>
   - POST to /api/prompts/initial
   - Includes emotion, child_profile, child_routine, current_time
   - Creates session in database
-  - Sets prompts and sessionId state
+  - Sets prompts (4 cards) and sessionId state
+  - Stores problem labels in previousProblems
+  - Shows regenerate button
+
+handleRegenerateProblems(): Promise<void>
+  - POST to /api/prompts/regenerate-problems
+  - Includes session_id, emotion, previous_problems, child_profile, child_routine, current_time
+  - Receives 4 new alternative problem cards
+  - Updates prompts state with new cards
+  - Appends new problems to previousProblems
 
 fetchFollowupPrompts(selectedOption: string): Promise<void>
   - POST to /api/prompts/followup
   - Includes session_id, selected_option, conversation context
-  - Updates prompts state
+  - Updates prompts state with 4 follow-up cards
   - Stores interaction in database
+  - Hides regenerate button
 
 // Conversation Actions
 handleCardSelect(selectedLabel: string): Promise<void>
   - Adds selection to conversation history
   - Routes to follow-up or action buttons based on promptType
+  - Hides regenerate button after selection
 
 handleDigDeeper(): Promise<void>
   - POST to /api/prompts/dig-deeper
   - Includes full conversation history and context
   - Increments interaction depth
-  - Shows new prompt cards
+  - Shows 4 new prompt cards
 
 handleProceedToSolution(): Promise<void>
   - POST to /api/solution/generate
@@ -131,12 +147,14 @@ handleSatisfied(): Promise<void>
   - Updates session with satisfaction status
   - Creates session summary
   - Marks session as completed
-  - Resets state for new session
+  - Resets ALL state variables to initial values
+  - Returns to start screen (ready for new session)
 
 handleNotSatisfied(): Promise<void>
   - POST to /api/solution/regenerate
-  - Includes previous solution for context
+  - Includes previous solution and conversation context
   - Updates displayed solution
+  - Allows user to provide feedback again
 
 // Database Operations
 createSession(sessionId: string): Promise<void>
@@ -189,7 +207,28 @@ interface SolutionDisplayProps {
 - Orange button for "Try Again"
 - Framer Motion animations
 
-### 4. PictureCards Component (Existing)
+### 4. RegenerateButton Component (New)
+
+**Props Interface:**
+```typescript
+interface RegenerateButtonProps {
+  onRegenerate: () => void;
+  loading: boolean;
+}
+```
+
+**Responsibilities:**
+- Display a button to regenerate problem list
+- Show loading state during regeneration
+- Only visible during initial problem display
+
+**Styling:**
+- Distinct styling to differentiate from picture cards
+- Orange/amber gradient to indicate alternative action
+- Framer Motion animations for interactions
+- Text: "Not listed? Show me different problems"
+
+### 5. PictureCards Component (Existing)
 
 **Props Interface:**
 ```typescript
@@ -310,7 +349,30 @@ session_interactions {
 }
 ```
 
-#### 2. POST /api/prompts/followup
+#### 2. POST /api/prompts/regenerate-problems
+
+**Request Body:**
+```typescript
+{
+  session_id: string;
+  emotion: string;
+  previous_problems: string[]; // Labels of previously shown problems
+  child_profile: { child_name, age, diagnosis };
+  child_routine: ChildRoutine;
+  current_time: string;
+}
+```
+
+**Response:**
+```typescript
+{
+  prompts: PromptOption[]; // 4 new alternative problem cards
+}
+```
+
+**Note:** The Gemini service must ensure the new problems are different from those in previous_problems array.
+
+#### 3. POST /api/prompts/followup
 
 **Request Body:**
 ```typescript
@@ -334,7 +396,7 @@ session_interactions {
 }
 ```
 
-#### 3. POST /api/prompts/dig-deeper
+#### 4. POST /api/prompts/dig-deeper
 
 **Request Body:**
 ```typescript
@@ -355,7 +417,7 @@ session_interactions {
 }
 ```
 
-#### 4. POST /api/solution/generate
+#### 5. POST /api/solution/generate
 
 **Request Body:**
 ```typescript
@@ -375,7 +437,7 @@ session_interactions {
 }
 ```
 
-#### 5. POST /api/solution/regenerate
+#### 6. POST /api/solution/regenerate
 
 **Request Body:**
 ```typescript
@@ -404,10 +466,12 @@ The UI uses AnimatePresence from Framer Motion to smoothly transition between ph
 
 1. **Initial State**: Large "Lumi 🌟" title with Start button
 2. **Recording State**: Video feed with countdown and live emotion display
-3. **Cards State**: PictureCards component with prompt options
-4. **Action State**: ActionButtons component with two choices
-5. **Solution State**: SolutionDisplay component with feedback buttons
-6. **Loading State**: Spinner with "Thinking..." message
+3. **Problem Cards State**: 4 PictureCards + RegenerateButton for initial problems
+4. **Follow-up Cards State**: 4 PictureCards for narrowing down the problem
+5. **Action State**: ActionButtons component with "Proceed to Solution" and "Dig Deeper"
+6. **Solution State**: SolutionDisplay component with "This Helps" and "Not Satisfied" buttons
+7. **Loading State**: Spinner with "Thinking..." message
+8. **Reset State**: Returns to Initial State after "This Helps" is clicked
 
 ### Conditional Rendering Logic
 
@@ -421,15 +485,28 @@ The UI uses AnimatePresence from Framer Motion to smoothly transition between ph
 )}
 
 {showCards && !loadingPrompts && (
-  <PictureCards />
+  <>
+    <PictureCards prompts={prompts} onSelect={handleCardSelect} emotion={emotion} />
+    {showRegenerateButton && promptType === "initial" && (
+      <RegenerateButton onRegenerate={handleRegenerateProblems} loading={loadingPrompts} />
+    )}
+  </>
 )}
 
 {showActionButtons && (
-  <ActionButtons />
+  <ActionButtons 
+    onProceedToSolution={handleProceedToSolution} 
+    onDigDeeper={handleDigDeeper} 
+  />
 )}
 
 {showSolution && !loadingPrompts && (
-  <SolutionDisplay />
+  <SolutionDisplay 
+    solution={solution}
+    emotion={emotion}
+    onSatisfied={handleSatisfied}
+    onNotSatisfied={handleNotSatisfied}
+  />
 )}
 
 {loadingPrompts && (
@@ -540,6 +617,7 @@ useEffect(() => {
 **Components to Test:**
 - ActionButtons: Verify callbacks fire correctly
 - SolutionDisplay: Verify callbacks and prop rendering
+- RegenerateButton: Verify regeneration callback and loading state
 - StartPage utility functions: getCurrentTime(), state updates
 
 **Test Cases:**
@@ -547,14 +625,18 @@ useEffect(() => {
 - Prop validation
 - State transitions
 - Time formatting
+- Problem regeneration logic
+- Previous problems tracking
 
 ### Integration Testing
 
 **Flows to Test:**
-1. Complete happy path: Camera → Emotion → Initial → Follow-up → Action → Solution → Satisfied
-2. Dig deeper flow: Camera → Emotion → Initial → Follow-up → Dig Deeper → Solution
-3. Regenerate solution flow: Solution → Not Satisfied → New Solution
-4. Error handling: API failures, missing data
+1. Complete happy path: Camera → Emotion → 4 Initial Problems → Select → 4 Follow-ups → Select → Action → Solution → This Helps → Reset
+2. Problem regeneration flow: Camera → Emotion → 4 Initial Problems → Regenerate → 4 New Problems → Select → Continue
+3. Dig deeper flow: Camera → Emotion → Initial → Follow-up → Dig Deeper → 4 New Cards → Solution
+4. Regenerate solution flow: Solution → Not Satisfied → New Solution → This Helps
+5. Multiple dig deeper levels: Test going 3-4 levels deep
+6. Error handling: API failures, missing data
 
 **Test Environment:**
 - Mock Supabase client
@@ -565,12 +647,16 @@ useEffect(() => {
 
 - [ ] Camera permission flow
 - [ ] Emotion detection accuracy
-- [ ] Initial prompts load with context
-- [ ] Follow-up prompts are relevant
-- [ ] Dig deeper generates new prompts
+- [ ] Initial prompts show exactly 4 problem cards
+- [ ] Regenerate button appears with initial problems
+- [ ] Regenerate problems generates 4 new different problems
+- [ ] Follow-up prompts show exactly 4 cards
+- [ ] Dig deeper generates exactly 4 new prompts
 - [ ] Solution is contextually appropriate
-- [ ] Satisfied flow completes session
-- [ ] Not satisfied regenerates solution
+- [ ] "This Helps" completes session and resets to start
+- [ ] "Not Satisfied" regenerates solution
+- [ ] Can regenerate solution multiple times
+- [ ] Session resets properly after completion
 - [ ] Session data persists correctly
 - [ ] Error messages display appropriately
 - [ ] Loading states show during API calls
@@ -639,17 +725,23 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<supabase-key>
 ### Functional Limitations
 
 1. **Single session at a time**: No support for pausing/resuming sessions
-2. **No conversation history UI**: Users can't review previous selections
+2. **No conversation history UI**: Users can't review previous selections during the session
 3. **Limited error recovery**: Some errors require page refresh
 4. **No offline support**: Requires active internet connection
+5. **Fixed card count**: Always generates exactly 4 cards per stage (not configurable)
+6. **No limit on regenerations**: Users can regenerate problems indefinitely (may need rate limiting)
 
 ### Future Enhancements
 
-1. Add conversation history visualization
-2. Implement session pause/resume
-3. Add voice input option
+1. Add conversation history visualization showing the path taken
+2. Implement session pause/resume functionality
+3. Add voice input option for card selection
 4. Support multiple languages
-5. Add parent dashboard for session review
+5. Add parent dashboard for session review and pattern analysis
 6. Implement progressive web app features
 7. Add accessibility improvements (screen reader support)
 8. Implement conversation branching visualization
+9. Add rate limiting for problem regeneration
+10. Allow configurable card count (4, 6, or 8 options)
+11. Add "Go Back" functionality to previous card selection
+12. Implement smart problem caching to avoid duplicate regenerations

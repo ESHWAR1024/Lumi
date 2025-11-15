@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import PictureCards from "../components/PictureCards";
 import ActionButtons from "../components/ActionButtons";
 import SolutionDisplay from "../components/SolutionDisplay";
+import RegenerateButton from "../components/RegenerateButton";
 import { useEyeTracking } from "../hooks/useEyeTracking";
 
 const EMOTION_COLORS: { [key: string]: string } = {
@@ -46,11 +47,13 @@ export default function StartPage() {
   const [loadingPrompts, setLoadingPrompts] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<string[]>([]);
   const [interactionDepth, setInteractionDepth] = useState(1);
+  const [previousProblems, setPreviousProblems] = useState<string[]>([]);
   
   // Action and solution states
   const [showActionButtons, setShowActionButtons] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [solution, setSolution] = useState("");
+  const [showRegenerateButton, setShowRegenerateButton] = useState(false);
   
   // Eye tracking state
   const [eyeTrackingEnabled, setEyeTrackingEnabled] = useState(false);
@@ -162,9 +165,11 @@ export default function StartPage() {
       setShowCards(false);
       setShowActionButtons(false);
       setShowSolution(false);
+      setShowRegenerateButton(false);
       setPrompts([]);
       setConversationHistory([]);
       setInteractionDepth(1);
+      setPreviousProblems([]);
       emotionRef.current = ""; // Reset ref as well
       emotionHistoryRef.current = []; // Reset emotion history
       setSessionActive(true); // Mark session as active
@@ -369,6 +374,11 @@ export default function StartPage() {
       setSessionId(data.session_id);
       setPromptType("initial");
       setShowCards(true);
+      setShowRegenerateButton(true); // Show regenerate button after initial prompts load
+      
+      // Store problem labels in previousProblems
+      const problemLabels = data.prompts.map((prompt: PromptOption) => prompt.label);
+      setPreviousProblems(problemLabels);
       
       // Create session in database with error handling
       try {
@@ -467,6 +477,91 @@ export default function StartPage() {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(`Failed to load follow-up cards: ${errorMessage}. Please try again.`);
       setShowCards(false);
+    } finally {
+      setLoadingPrompts(false);
+    }
+  };
+
+  const handleRegenerateProblems = async () => {
+    if (!childProfile) {
+      console.error("❌ Cannot regenerate problems - childProfile is null");
+      setError("Profile not loaded. Please refresh the page and try again.");
+      return;
+    }
+    
+    setLoadingPrompts(true);
+    setError("");
+    
+    try {
+      const formatRoutineForAPI = (routine: any) => {
+        if (!routine) {
+          return {
+            wake_up_time: null,
+            breakfast_time: null,
+            lunch_time: null,
+            snacks_time: null,
+            dinner_time: null,
+            bedtime: null,
+            favorite_activities: null,
+            comfort_items: null,
+            preferred_prompts: null,
+            communication_preferences: null
+          };
+        }
+        
+        return {
+          wake_up_time: routine.wake_time || routine.wake_up_time || null,
+          breakfast_time: routine.breakfast_time || null,
+          lunch_time: routine.lunch_time || null,
+          snacks_time: routine.snack_times ? (Array.isArray(routine.snack_times) ? routine.snack_times.join(", ") : routine.snack_times) : null,
+          dinner_time: routine.dinner_time || null,
+          bedtime: routine.bedtime || null,
+          favorite_activities: routine.favorite_activities ? (Array.isArray(routine.favorite_activities) ? routine.favorite_activities.join(", ") : routine.favorite_activities) : null,
+          comfort_items: routine.comfort_items ? (Array.isArray(routine.comfort_items) ? routine.comfort_items.join(", ") : routine.comfort_items) : null,
+          preferred_prompts: routine.preferred_prompts ? (Array.isArray(routine.preferred_prompts) ? routine.preferred_prompts.join(", ") : routine.preferred_prompts) : null,
+          communication_preferences: routine.communication_preferences || null
+        };
+      };
+      
+      const requestBody = {
+        session_id: sessionId,
+        emotion: emotion,
+        previous_problems: previousProblems,
+        child_profile: {
+          child_name: childProfile.child_name,
+          age: childProfile.age,
+          diagnosis: childProfile.diagnosis || childProfile.condition
+        },
+        child_routine: formatRoutineForAPI(childRoutine),
+        current_time: getCurrentTime()
+      };
+      
+      console.log("📤 Regenerating problems with request:", JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch("http://localhost:8001/api/prompts/regenerate-problems", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        console.error("❌ API Error Response:", errorData);
+        throw new Error(`HTTP error! status: ${response.status}${errorData ? `: ${JSON.stringify(errorData)}` : ''}`);
+      }
+
+      const data = await response.json();
+      console.log("✅ Received regenerated prompts:", data);
+      
+      // Update prompts state with 4 new cards
+      setPrompts(data.prompts);
+      
+      // Append new problem labels to previousProblems
+      const newProblemLabels = data.prompts.map((prompt: PromptOption) => prompt.label);
+      setPreviousProblems(prev => [...prev, ...newProblemLabels]);
+    } catch (err) {
+      console.error("❌ Failed to regenerate problems:", err);
+      setError("Failed to generate new problem options. Please try again.");
     } finally {
       setLoadingPrompts(false);
     }
@@ -660,10 +755,14 @@ export default function StartPage() {
     setPrompts([]);
     setSolution("");
     
-    // Hide all UI components (cards, actions, solution)
+    // Clear previousProblems array
+    setPreviousProblems([]);
+    
+    // Hide all UI components (cards, actions, solution, regenerate button)
     setShowCards(false);
     setShowActionButtons(false);
     setShowSolution(false);
+    setShowRegenerateButton(false);
     
     // Clear session ID
     setSessionId("");
@@ -875,6 +974,7 @@ export default function StartPage() {
 
   const handleCardSelect = async (selectedLabel: string) => {
     setConversationHistory(prev => [...prev, selectedLabel]);
+    setShowRegenerateButton(false); // Hide regenerate button after card selection
     
     if (promptType === "initial") {
       setShowCards(false);
@@ -1262,15 +1362,11 @@ export default function StartPage() {
               gazeData={eyeTrackingEnabled ? gazeData : null}
             />
             
-            {promptType === "initial" && (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleInitialDigDeeper}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-lg px-8 py-4 rounded-full shadow-lg"
-              >
-                None of these - Show me different options
-              </motion.button>
+            {showRegenerateButton && promptType === "initial" && (
+              <RegenerateButton 
+                onRegenerate={handleRegenerateProblems}
+                loading={loadingPrompts}
+              />
             )}
           </motion.div>
         )}
