@@ -1,93 +1,305 @@
 import os
+import random
+import numpy as np
+import torch
 from PIL import Image
 from torch.utils.data import Dataset
 import torchvision.transforms as T
+from torchvision.transforms import functional as TF
 
+# =========================================================
+# ⚡ YOUR ORIGINAL CLASS NAMES
+# =========================================================
 CLASS_NAMES = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
 
 
-def get_transforms(phase='train', img_size=224):
-    """
-    Get image transforms for training/validation.
+# =========================================================
+# ⚡ YOUR ORIGINAL AUGMENTATIONS (UNCHANGED)
+# =========================================================
+
+class MixUp:
+    def __init__(self, alpha=0.2):
+        self.alpha = alpha
     
-    CRITICAL FIXES:
-    1. Increased default image size to 224x224 (standard for ImageNet pretrained models)
-    2. Fixed normalization to match ImageNet pretraining
-    3. Added more aggressive augmentation for training
-    """
+    def __call__(self, batch_x, batch_y):
+        lam = np.random.beta(self.alpha, self.alpha) if self.alpha > 0 else 1
+        batch_size = batch_x.size(0)
+        index = torch.randperm(batch_size)
+        
+        mixed_x = lam * batch_x + (1 - lam) * batch_x[index]
+        y_a, y_b = batch_y, batch_y[index]
+        
+        return mixed_x, y_a, y_b, lam
+
+
+class CutMix:
+    def __init__(self, alpha=1.0):
+        self.alpha = alpha
     
-    # ImageNet normalization (IMPORTANT for pretrained models!)
-    imagenet_mean = [0.485, 0.456, 0.406]
-    imagenet_std = [0.229, 0.224, 0.225]
+    def __call__(self, batch_x, batch_y):
+        lam = np.random.beta(self.alpha, self.alpha)
+        batch_size = batch_x.size(0)
+        index = torch.randperm(batch_size)
+        
+        bbx1, bby1, bbx2, bby2 = self._rand_bbox(batch_x.size(), lam)
+        batch_x[:, :, bbx1:bbx2, bby1:bby2] = batch_x[index, :, bbx1:bbx2, bby1:bby2]
+        
+        lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (batch_x.size(-1) * batch_x.size(-2)))
+        y_a, y_b = batch_y, batch_y[index]
+        
+        return batch_x, y_a, y_b, lam
     
-    if phase == 'train':
+    def _rand_bbox(self, size, lam):
+        W = size[2]
+        H = size[3]
+        cut_rat = np.sqrt(1. - lam)
+        cut_w = int(W * cut_rat)
+        cut_h = int(H * cut_rat)
+        
+        cx = np.random.randint(W)
+        cy = np.random.randint(H)
+        
+        bbx1 = np.clip(cx - cut_w // 2, 0, W)
+        bby1 = np.clip(cy - cut_h // 2, 0, H)
+        bbx2 = np.clip(cx + cut_w // 2, 0, W)
+        bby2 = np.clip(cy + cut_h // 2, 0, H)
+        
+        return bbx1, bby1, bbx2, bby2
+
+
+class RandomFaceCrop:
+    def __init__(self, scale=(0.8, 1.0)):
+        self.scale = scale
+    
+    def __call__(self, img):
+        width, height = img.size
+        scale = random.uniform(*self.scale)
+        
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        
+        left = random.randint(0, width - new_width)
+        top = random.randint(0, height - new_height)
+        
+        return TF.crop(img, top, left, new_height, new_width)
+
+
+class RandomOcclusion:
+    def __init__(self, p=0.5, scale=(0.02, 0.1)):
+        self.p = p
+        self.scale = scale
+    
+    def __call__(self, img):
+        if random.random() < self.p:
+            img_array = np.array(img)
+            h, w = img_array.shape[:2]
+            
+            size = random.randint(int(h * self.scale[0]), int(h * self.scale[1]))
+            x = random.randint(0, w - size)
+            y = random.randint(0, h - size)
+            
+            color = random.randint(0, 255)
+            img_array[y:y+size, x:x+size] = color
+            
+            return Image.fromarray(img_array)
+        return img
+
+
+# =========================================================
+# ⚡ YOUR ORIGINAL TRANSFORMS (UNCHANGED)
+# =========================================================
+
+def get_advanced_transforms(phase='train', img_size=224):
+    normalize = T.Normalize(mean=[0.485, 0.456, 0.406],
+                            std=[0.229, 0.224, 0.225])
+    
+    if phase == "train":
         return T.Compose([
             T.Resize((img_size, img_size)),
-            T.RandomHorizontalFlip(p=0.5),
-            T.RandomRotation(15),  # Increased from 10
-            T.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2),  # More aggressive
-            T.RandomAffine(degrees=0, translate=(0.1, 0.1)),  # Add slight translation
+            RandomFaceCrop(scale=(0.85, 1.0)),
+            T.Resize((img_size, img_size)),
+            T.RandomHorizontalFlip(0.5),
+            T.RandomRotation(20, fill=128),
+            T.RandomAffine(0, translate=(0.15, 0.15), scale=(0.9, 1.1), fill=128),
+            T.ColorJitter(0.4, 0.4, 0.3, 0.1),
+            RandomOcclusion(0.3, (0.02, 0.08)),
+            T.GaussianBlur(3, sigma=(0.1, 2.0)),
             T.ToTensor(),
-            T.Normalize(mean=imagenet_mean, std=imagenet_std)
+            normalize,
+            T.RandomErasing(0.25)
         ])
+    
     else:
         return T.Compose([
             T.Resize((img_size, img_size)),
             T.ToTensor(),
-            T.Normalize(mean=imagenet_mean, std=imagenet_std)
+            normalize
         ])
 
 
-def get_transforms_lightweight(phase='train', img_size=48):
-    """
-    Lighter transforms for 48x48 images (if using SimpleCNN).
-    Uses simpler normalization since no pretrained weights.
-    """
-    if phase == 'train':
-        return T.Compose([
-            T.Resize((img_size, img_size)),
-            T.RandomHorizontalFlip(),
-            T.RandomRotation(10),
-            T.ColorJitter(brightness=0.2, contrast=0.2),
-            T.ToTensor(),
-            T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # Simple normalization
-        ])
-    else:
-        return T.Compose([
-            T.Resize((img_size, img_size)),
-            T.ToTensor(),
-            T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-        ])
+def get_transforms(phase="train", img_size=224):
+    return get_advanced_transforms(phase, img_size)
 
 
-class FERImageFolder(Dataset):
+# =========================================================
+# ✅ EXPW DATASET LOADER (WORKING WITH origin/ + label.lst)
+# =========================================================
+
+class ExpWDataset(Dataset):
     """
-    Simple dataset expecting structure:
-    root/class_x/xxx.png
-    root/class_y/123.png
+    ExpW dataset format:
+    
+    root/
+        origin/
+            000001.jpg
+            000002.jpg
+            ...
+        label.lst
+
+    label.lst fields:
+        image_name face_id top left right bottom confidence expression_label
     """
-    def __init__(self, root_dir, transform=None, classes=CLASS_NAMES):
+
+    def __init__(self, root_dir, transform=None):
         self.root = root_dir
+        self.img_dir = os.path.join(root_dir, "origin")
         self.transform = transform
+
+        label_file = os.path.join(root_dir, "label.lst")
         self.samples = []
-        self.classes = classes
-        
-        for idx, cls in enumerate(self.classes):
-            cls_dir = os.path.join(root_dir, cls)
-            if not os.path.isdir(cls_dir):
-                continue
-            for fname in os.listdir(cls_dir):
-                if fname.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    self.samples.append((os.path.join(cls_dir, fname), idx))
-        
-        print(f"Loaded {len(self.samples)} images from {root_dir}")
+
+        with open(label_file, "r") as f:
+            for line in f:
+                parts = line.strip().split()
+
+                img_name = parts[0]           # 000123.jpg
+                expr_label = int(parts[-1])   # last column = expression 0–6
+
+                full_path = os.path.join(self.img_dir, img_name)
+
+                if os.path.exists(full_path):
+                    self.samples.append((full_path, expr_label))
+
+        print(f"✅ Loaded ExpW: {len(self.samples)} images")
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         path, label = self.samples[idx]
-        img = Image.open(path).convert('RGB')
+        img = Image.open(path).convert("RGB")
+
         if self.transform:
             img = self.transform(img)
+
         return img, label
+
+
+# =========================================================
+# ⚡ YOUR ORIGINAL FERImageFolder + TTA (UNCHANGED)
+# =========================================================
+
+class FERImageFolder(Dataset):
+    def __init__(self, root_dir, transform=None, classes=CLASS_NAMES, balance_classes=False):
+        self.root = root_dir
+        self.transform = transform
+        self.classes = classes
+        self.class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
+        self.samples = []
+
+        for idx, cls in enumerate(self.classes):
+            cls_dir = os.path.join(root_dir, cls)
+            if not os.path.isdir(cls_dir):
+                print(f"Warning: {cls_dir} missing")
+                continue
+            
+            for fname in os.listdir(cls_dir):
+                if fname.lower().endswith(('.jpg', '.png', '.jpeg')):
+                    self.samples.append((os.path.join(cls_dir, fname), idx))
+
+        print(f"Loaded {len(self.samples)} samples from {root_dir}")
+
+        if balance_classes:
+            self._balance()
+
+    def _balance(self):
+        from collections import defaultdict
+        
+        class_groups = defaultdict(list)
+        for s in self.samples:
+            class_groups[s[1]].append(s)
+
+        max_len = max(len(v) for v in class_groups.values())
+        new_samples = []
+
+        for cls, items in class_groups.items():
+            repeat = max_len // len(items)
+            remainder = max_len % len(items)
+            new_samples.extend(items * repeat)
+            new_samples.extend(items[:remainder])
+
+        self.samples = new_samples
+        print(f"Balanced dataset to {len(self.samples)} samples")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        path, label = self.samples[idx]
+        img = Image.open(path).convert("RGB")
+        
+        if self.transform:
+            img = self.transform(img)
+
+        return img, label
+
+
+class TTADataset(Dataset):
+    def __init__(self, base_dataset, n_tta=5):
+        self.base_dataset = base_dataset
+        self.n_tta = n_tta
+        self.tta_transform = get_transforms("val", 224)
+
+    def __len__(self):
+        return len(self.base_dataset) * self.n_tta
+
+    def __getitem__(self, idx):
+        base_idx = idx // self.n_tta
+        img, label = self.base_dataset[base_idx]
+
+        if isinstance(img, torch.Tensor):
+            img = T.ToPILImage()(img)
+
+        img = self.tta_transform(img)
+        return img, label, base_idx
+
+
+# Add to emotion_backend/src/dataset.py
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
+def get_transforms_advanced(phase='train', img_size=224):
+    """
+    Advanced augmentation using Albumentations
+    Install: pip install albumentations
+    """
+    if phase == 'train':
+        return A.Compose([
+            A.Resize(img_size, img_size),
+            A.HorizontalFlip(p=0.5),
+            A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.15, rotate_limit=15, p=0.5),
+            A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=0.5),
+            A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=20, p=0.5),
+            A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+            A.GaussianBlur(blur_limit=(3, 5), p=0.3),
+            A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=0.3),
+            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ToTensorV2()
+        ])
+    else:
+        return A.Compose([
+            A.Resize(img_size, img_size),
+            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ToTensorV2()
+        ])
