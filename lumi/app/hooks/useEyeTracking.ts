@@ -10,7 +10,8 @@ interface GazeData {
 
 export function useEyeTracking(
   enabled: boolean,
-  onSelect: (index: number) => void
+  onSelect: (index: number) => void,
+  mode: 'cards' | 'buttons' = 'cards'
 ) {
   const [gazeData, setGazeData] = useState<GazeData | null>(null);
   const [connected, setConnected] = useState(false);
@@ -133,7 +134,7 @@ export function useEyeTracking(
 
         try {
           const frameData = canvas.toDataURL('image/jpeg', 0.8);
-          ws.send(JSON.stringify({ type: 'frame', frame: frameData }));
+          ws.send(JSON.stringify({ type: 'frame', frame: frameData, mode: mode }));
         } catch (error) {
           console.error('Error sending frame:', error);
         }
@@ -155,7 +156,7 @@ export function useEyeTracking(
         videoRef.current.srcObject = null;
       }
     };
-  }, [enabled]); // Removed onSelect from dependencies
+  }, [enabled, mode]); // Added mode to dependencies
 
   return { gazeData, videoRef, canvasRef, connected };
 }

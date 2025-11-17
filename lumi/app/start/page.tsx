@@ -7,7 +7,7 @@ import PictureCards from "../components/PictureCards";
 import ActionButtons from "../components/ActionButtons";
 import SolutionDisplay from "../components/SolutionDisplay";
 import RegenerateButton from "../components/RegenerateButton";
-import { useEyeTracking } from "../hooks/useEyeTracking";
+import { useSharedEyeTracking } from "../hooks/useSharedEyeTracking";
 
 const EMOTION_COLORS: { [key: string]: string } = {
   happy: "#FFD700",
@@ -987,16 +987,44 @@ export default function StartPage() {
   };
 
   // Eye tracking selection handler
-  const handleEyeTrackingSelect = (cardIndex: number) => {
-    if (prompts[cardIndex]) {
-      handleCardSelect(prompts[cardIndex].label);
+  const handleEyeTrackingSelect = (index: number) => {
+    // Handle card selection (0-3)
+    if (index >= 0 && index <= 3 && prompts[index]) {
+      handleCardSelect(prompts[index].label);
+    }
+    // Handle action button selection (4-5)
+    else if (index === 4) {
+      handleProceedToSolution();
+    } else if (index === 5) {
+      handleDigDeeper();
+    }
+    // Handle solution button selection (6-7)
+    else if (index === 6) {
+      handleSatisfied();
+    } else if (index === 7) {
+      handleNotSatisfied();
+    }
+    // Handle regenerate button selection (8)
+    else if (index === 8) {
+      handleRegenerateProblems();
     }
   };
 
-  // Eye tracking hook
-  const { gazeData, videoRef: eyeVideoRef, canvasRef: eyeCanvasRef, connected: eyeTrackingConnected } = useEyeTracking(
-    eyeTrackingEnabled && showCards,
-    handleEyeTrackingSelect
+  // Determine current mode based on what's visible
+  const eyeTrackingMode = showSolution 
+    ? 'solution' 
+    : showActionButtons 
+    ? 'buttons' 
+    : (showCards && showRegenerateButton && promptType === "initial")
+    ? 'cards_with_regenerate'
+    : 'cards';
+
+  // Single shared eye tracking hook
+  const { gazeData, videoRef: eyeVideoRef, canvasRef: eyeCanvasRef, connected: eyeTrackingConnected } = useSharedEyeTracking(
+    eyeTrackingEnabled && (showCards || showActionButtons || showSolution),
+    handleEyeTrackingSelect,
+    eyeTrackingMode,
+    'main'
   );
 
   const handleInitialDigDeeper = async () => {
@@ -1366,6 +1394,7 @@ export default function StartPage() {
               <RegenerateButton 
                 onRegenerate={handleRegenerateProblems}
                 loading={loadingPrompts}
+                gazeData={eyeTrackingEnabled ? gazeData : null}
               />
             )}
           </motion.div>
@@ -1382,6 +1411,7 @@ export default function StartPage() {
             <ActionButtons
               onProceedToSolution={handleProceedToSolution}
               onDigDeeper={handleDigDeeper}
+              gazeData={eyeTrackingEnabled ? gazeData : null}
             />
           </motion.div>
         )}
@@ -1399,6 +1429,7 @@ export default function StartPage() {
               emotion={emotion}
               onSatisfied={handleSatisfied}
               onNotSatisfied={handleNotSatisfied}
+              gazeData={eyeTrackingEnabled ? gazeData : null}
             />
           </motion.div>
         )}
