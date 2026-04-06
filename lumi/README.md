@@ -357,7 +357,7 @@ lumi/
 
 ## Contributors
 
-ARYAN NANGARATH-aryannangarath407@gmail.com
+ARYAN NANGARATH
 ESHWAR-
 
 ---
